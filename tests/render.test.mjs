@@ -34,3 +34,29 @@ test('delivery boat trip has a visible outbound leg, return, and stable endpoint
  assert.ok(visual.boatTripPoint(-3).x===9);
  assert.ok(visual.boatTripPoint(999).x===9);
 });
+
+test('terrain texture choice is deterministic, preserves sea and shore, and varies lush meadow', () => {
+  assert.equal(typeof visual.groundTexture, 'function');
+  assert.equal(visual.groundTexture(9, 1, 'water'), 'water');
+  assert.equal(visual.groundTexture(9, 1, 'sand'), 'sand');
+  const kinds = new Set();
+  for (let x=0;x<24;x++) for (let y=0;y<24;y++) {
+    const b = ((x+y)%3===0) ? 'grass2' : 'grass';
+    const first = visual.groundTexture(x,y,b);
+    assert.equal(first, visual.groundTexture(x,y,b));
+    assert.ok(['grass','grass2','meadow','clover'].includes(first), first);
+    kinds.add(first);
+  }
+  assert.deepEqual([...kinds].sort(), ['clover','grass','grass2','meadow']);
+});
+
+test('chibi proportions use larger head than torso and keep feet on the world ground plane', () => {
+  assert.equal(typeof visual.CHARACTER_SPECS, 'object');
+  for (const type of ['neighbor','neighbor2']) {
+    const spec = visual.CHARACTER_SPECS[type];
+    assert.ok(spec.headWidth >= spec.bodyWidth*1.45, spec);
+    assert.ok(spec.headHeight > spec.bodyHeight, spec);
+    assert.equal(spec.feetY, 103);
+  }
+  assert.ok(visual.CHARACTER_SPECS.cat.headWidth > visual.CHARACTER_SPECS.cat.bodyWidth);
+});
