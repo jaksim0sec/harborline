@@ -82,6 +82,14 @@ body{margin:0;overflow:hidden}
 .festival-fill{width:0;height:100%;border-radius:12px;background:linear-gradient(90deg,#d5aa84,#c4876f);transition:width .4s}
 .festival p{margin:0;color:#a58d79;font-size:10.5px;line-height:1.5}
 .close-orders{display:block;border:0;background:transparent;font-size:24px;color:#987e72}
+.coast-project{margin-top:7px;border-top:1px solid #e8e1d4;padding:6px 3px 1px;flex-shrink:0}
+.coast-title{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;color:#507968}
+.coast-title span{font-size:10px;color:#9e9c88;font-weight:700}
+.coast-project p{font-size:10px;color:#898e7d;line-height:1.35;margin:3px 0 0}
+.coast-button{display:block;width:100%;margin-top:7px;min-height:39px;border:0;border-radius:11px;background:#588e76;color:#fffaf0;font-size:11px;font-weight:800}
+.coast-button:hover:not(:disabled){background:#4d826d}
+.coast-button:disabled{background:#e8ebe0;color:#8e9c8b}
+.coast-button[hidden]{display:none}
 
 .map-controls{position:absolute;left:26px;bottom:107px;display:flex;flex-direction:column;background:#faf8eaf0;border:1px solid #ffffffd6;border-radius:14px;overflow:hidden;box-shadow:0 5px 25px #355e6124}
 .map-controls button{height:38px;width:40px;background:transparent;border:0;border-bottom:1px solid #e6e6d9;color:#5b807b;font-size:23px;line-height:1}

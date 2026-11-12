@@ -1,4 +1,4 @@
-import { createGame, hydrate, DAY_MS, SAVE_KEY, ITEMS, connections, place, remove, advanceDay, deliver, population, occupied, evaluatePlacement, setFocusOrder, workplaceForOrder, forecastOrder, nextStep } from './model.js';
+import { createGame, hydrate, DAY_MS, SAVE_KEY, ITEMS, connections, place, remove, advanceDay, deliver, population, occupied, evaluatePlacement, canExpandCoast, expandCoast, setFocusOrder, workplaceForOrder, forecastOrder, nextStep } from './model.js';
 import { Scene } from './render.js';
 
 const $=s=>document.querySelector(s), canvas=$('#world');
@@ -49,6 +49,12 @@ function renderHUD(){
  $('#festivalLabel').textContent=game.celebrated?'축제 개최!':`${count} / 6`;
  $('#festivalFill').style.width=`${count/6*100}%`;
  $('#festivalHint').textContent=game.celebrated?'축제를 열었어요! 원하는 만큼 마을을 더 가꿔요':'배달 6번을 마치면 마을에 축제가 열려요';
+ const check=canExpandCoast(game),done=game.coastExpanded;
+ $('#coastState').textContent=done?'확장 완료':'배달 '+Math.min(game.completed,2)+'/2';
+ $('#coastHint').textContent=done?'새로운 건설 공간 12칸이 열렸어요':game.completed<2?'배달 2회 달성 후 개간 가능':check.ok?'코인 180 · 목재 8로 바닷가를 넓혀 보세요':check.message;
+ $('#expandCoast').disabled=!check.ok;
+ $('#expandCoast').hidden=game.completed<2&&!done;
+ $('#expandCoast').textContent=done?'🌿 바람꽃 해안 개간 완료':'해안 개간 · 180코인 · 목재 8';
  const guide=nextStep(game);$('#guideTitle').textContent=guide.title;$('#guideText').textContent=guide.message;
  $('#guideAction').textContent=({connect:'산책길 선택',decorate:'꾸미기 도구',deliver:'바로 배달',focus:'편지 열기',wait:'진행 확인'})[guide.action] || '편지 보기';
  $('#guideAction').dataset.action=guide.action;
@@ -120,6 +126,12 @@ $('#resetBtn').addEventListener('click',()=>{
 const panel=$('#ordersPanel');
 const toggleOrders=open=>{panel.classList.toggle('open',open);$('#mobileOrders').setAttribute('aria-expanded',String(open));};
 $('#mobileOrders').addEventListener('click',()=>toggleOrders(!panel.classList.contains('open')));
+$('#expandCoast').addEventListener('click',()=>{
+ const result=expandCoast(game);toast(result.message);if(!result.ok)return;
+ changed();toggleOrders(false);
+ const p=scene.worldToScreen(8,21);
+ scene.pan.x+=scene.width*.51-p.x;scene.pan.y+=scene.height*.55-p.y;
+});
 $('#guideAction').addEventListener('click',()=>{
  const action=$('#guideAction').dataset.action,orderId=$('#guideAction').dataset.guideOrder;
  if(action==='connect'){toggleOrders(false);setTool('road');return;}

@@ -348,13 +348,13 @@ export class Scene {
   c.imageSmoothingEnabled=true;
   for(let depth=0;depth<(SIZE-1)*2+1;depth++)for(let x=0;x<SIZE;x++){
    const y=depth-x;if(!inBounds(x,y))continue;
-   const p=this.tileCenter(x,y);this.sprite(c,groundTexture(x,y,terrain(x,y)),p.x,p.y);
+   const p=this.tileCenter(x,y);this.sprite(c,groundTexture(x,y,terrain(x,y,this.game)),p.x,p.y);
   }
   for(const r of this.game.roads){const p=this.tileCenter(r.x,r.y);this.sprite(c,'road',p.x,p.y);}
   const used=new Set([...this.game.roads,...this.game.buildings].map(b=>`${b.x},${b.y}`));
   const props=[];
   for(let x=0;x<SIZE;x++)for(let y=0;y<SIZE;y++){
-    if(!isLand(x,y)||used.has(`${x},${y}`))continue;
+    if(!isLand(x,y,this.game)||used.has(`${x},${y}`))continue;
     const h=hash(x,y);const edge=x<5||x>18||y<5||y>19;
     if(edge&&h<19)props.push({x,y,type:'tree'});
     else if(h<6)props.push({x,y,type:'bush'});
@@ -376,6 +376,10 @@ export class Scene {
   this.connectedRoads=roadSet;
   this.focusBuilding=workplaceForOrder(this.game);
   this.focusRoute=this.focusBuilding?routeToBuilding(this.game,this.focusBuilding.x,this.focusBuilding.y):null;
+  if(!this.game.coastExpanded && this.game.completed>=1){
+    const p=this.tileCenter(6,21);
+    c.drawImage(this.labelSprite('🌱 바람꽃 해안'),p.x-52,p.y-53);
+  }
   this.cache=cache;this.cacheDirty=false;
  }
  getCenter(){return {x:this.width*(this.width>=900?.46:.50)+this.pan.x,y:this.height*.55+this.pan.y};}

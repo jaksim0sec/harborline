@@ -272,3 +272,34 @@ test('after the first delivery the prompt calls it the next delivery',()=>{
  assert.notEqual(s.title,'첫 배달을 준비해 볼까요?');
  assert.ok(s.title.includes('다음') || s.action==='deliver');
 });
+
+test('coastal expansion unlocks exactly twelve previously submerged tiles',()=>{
+ const g=createGame(),tiles=gameRules.COAST_EXPANSION.tiles;
+ assert.equal(gameRules.SIZE,24);assert.equal(tiles.length,12);
+ assert.ok(tiles.every(p=>!gameRules.isLand(p.x,p.y,g)));
+ g.completed=2;g.resources.coin=500;g.resources.wood=20;
+ assert.ok(gameRules.expandCoast(g).ok);
+ assert.ok(tiles.every(p=>gameRules.isLand(p.x,p.y,g)));
+ assert.equal(gameRules.isLand(0,0,g),false);
+});
+test('coastal expansion requires deliveries and resources and charges once',()=>{
+ const g=createGame(),snapshot=JSON.stringify(g);
+ assert.equal(gameRules.expandCoast(g).ok,false);assert.equal(JSON.stringify(g),snapshot);
+ g.completed=2;g.resources.coin=179;assert.equal(gameRules.expandCoast(g).ok,false);
+ g.resources.coin=180;g.resources.wood=7;assert.equal(gameRules.expandCoast(g).ok,false);
+ g.resources.wood=8;assert.ok(gameRules.expandCoast(g).ok);
+ assert.equal(g.resources.coin,0);assert.equal(g.resources.wood,0);
+ assert.equal(gameRules.expandCoast(g).ok,false);assert.equal(g.resources.coin,0);
+});
+test('coastal expansion retains legacy saves and connected coast buildings',()=>{
+ const old=createGame();delete old.coastExpanded;
+ assert.equal(hydrate(old).coastExpanded,false);
+ const g=createGame();g.completed=2;assert.ok(gameRules.expandCoast(g).ok);
+ g.resources.coin=1000;g.resources.wood=100;
+ assert.ok(place(g,'road',9,22).ok);assert.ok(place(g,'farm',8,22).ok);
+ const restored=hydrate(JSON.parse(JSON.stringify(g)));
+ assert.equal(restored.version,1);assert.equal(restored.coastExpanded,true);
+ assert.ok(restored.roads.some(r=>r.x===9&&r.y===22));
+ assert.ok(restored.buildings.some(b=>b.x===8&&b.y===22));
+ assert.ok(gameRules.routeToBuilding(restored,8,22)?.length>=2);
+});
