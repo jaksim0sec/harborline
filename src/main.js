@@ -52,13 +52,16 @@ function renderHUD(){
  $('#festivalFill').style.width=`${count/6*100}%`;
  $('#festivalHint').textContent=game.celebrated?'축제를 열었어요! 원하는 만큼 마을을 더 가꿔요':'배달 6번을 마치면 마을에 축제가 열려요';
  const check=canExpandCoast(game),done=game.coastExpanded;
+ $('#mobileOrdersLabel').textContent=check.ok?'🌿 해안 개간':'✉ 배달';
+ $('#mobileOrders').classList.toggle('coast-ready',check.ok);
+ if(check.ok)$('#mobileOrders').setAttribute('aria-label','바람꽃 해안 개간하기');
  $('#coastState').textContent=done?'확장 완료':'배달 '+Math.min(game.completed,2)+'/2';
  $('#coastHint').textContent=done?'새로운 건설 공간 12칸이 열렸어요':game.completed<2?'배달 2회 달성 후 개간 가능':check.ok?'코인 180 · 목재 8로 바닷가를 넓혀 보세요':check.message;
  $('#expandCoast').disabled=!check.ok;
  $('#expandCoast').hidden=game.completed<2&&!done;
  $('#expandCoast').textContent=done?'🌿 바람꽃 해안 개간 완료':'해안 개간 · 180코인 · 목재 8';
  const guide=nextStep(game);$('#guideTitle').textContent=guide.title;$('#guideText').textContent=guide.message;
- $('#guideAction').textContent=({connect:'산책길 선택',decorate:'꾸미기 도구',deliver:'바로 배달',focus:'편지 열기',wait:'진행 확인'})[guide.action] || '편지 보기';
+ $('#guideAction').textContent=({connect:'산책길 선택',decorate:'꾸미기 도구',deliver:'바로 배달',focus:'편지 열기',wait:'진행 확인',expand:'해안 넓히기'})[guide.action] || '편지 보기';
  $('#guideAction').dataset.action=guide.action;
  $('#guideAction').dataset.guideOrder=guide.orderId===null?'':String(guide.orderId);
 }
@@ -138,6 +141,7 @@ $('#guideAction').addEventListener('click',()=>{
  const action=$('#guideAction').dataset.action,orderId=$('#guideAction').dataset.guideOrder;
  if(action==='connect'){toggleOrders(false);setTool('road');return;}
  if(action==='decorate'){setTool('garden');return;}
+ if(action==='expand'){$('#expandCoast').click();return;}
  setTool('inspect');toggleOrders(true);
  if(orderId!=='')$('#orderList').querySelector(`[data-letter="${orderId}"]`)?.scrollIntoView({block:'nearest'});
 });

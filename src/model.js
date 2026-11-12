@@ -257,6 +257,7 @@ export function forecastOrder(game, id, focusId=game.focusOrderId, maxDays=30) {
 
 /** A compact, optional next step. Pure derivation; no new tutorial/save state. */
 export function nextStep(game) {
+  if(canExpandCoast(game).ok)return {action:'expand',title:'바람꽃 해안 개간 준비!',message:'배달 2회 달성 · 180코인과 목재 8로 새 땅 12칸을 열어요',orderId:null};
   if(game.celebrated)return {action:'decorate',title:'첫 축제 달성!',message:'우리만의 바닷마을을 자유롭게 꾸며 보세요',orderId:null};
   const ready=game.orders.find(o=>game.resources[o.resource]>=o.amount);
   if(ready)return {action:'deliver',title:'배달 준비 완료',message:`${ready.title} · ${ready.coin}코인과 온기 +${ready.stars}`,orderId:ready.id};

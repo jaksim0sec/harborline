@@ -98,6 +98,8 @@ body{margin:0;overflow:hidden}
 .tool-hint{position:absolute;left:78px;bottom:117px;z-index:2;color:#477373;background:#f4faf0d9;border-radius:99px;padding:8px 12px;font-size:11px;font-weight:700;pointer-events:none}
 .mobile-orders{position:absolute;z-index:4;display:block;right:18px;top:78px;border:1px solid #f9f6eb;background:#fcf9eff0;color:#547b72;border-radius:13px;padding:10px 13px;font-size:12px;font-weight:850;box-shadow:0 7px 18px #375e5933}
 .mobile-orders span{color:#bf9278}
+.mobile-orders #mobileOrdersLabel{color:inherit}
+.mobile-orders.coast-ready #readyCount,.mobile-orders.coast-ready .focus-indicator{display:none}
 .mobile-orders .focus-indicator{color:#538c73}
 .orders-panel.open ~ .mobile-orders{display:none}
 .buildbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:2;width:max-content;max-width:min(calc(100% - 200px),850px);padding:7px 9px 8px;background:#fbf8f1f5;border:1px solid #fffdfa;border-radius:17px;box-shadow:0 12px 40px #38596336;backdrop-filter:blur(16px)}
