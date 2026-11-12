@@ -25,11 +25,11 @@ async def check():
     # Chromium in the model sandbox blocks all navigations, including loopback.
     # Verify the real HTTP server in Python, then inject the exact PNG bytes into the
     # same inline Chromium renderer as data URLs. Production still uses real file paths.
-    for name in ['home','bakery','tree']:
+    for name in ['home','bakery','tree','harbor','farm','sawmill','grass','grass2','meadow','clover']:
         with urllib.request.urlopen(url+'assets/textures/'+name+'.png') as response:
             assert response.status==200 and response.headers.get_content_type()=='image/png'
     html=game_document()
-    for name in ['home','bakery','tree']:
+    for name in ['home','bakery','tree','harbor','farm','sawmill','grass','grass2','meadow','clover']:
         uri='data:image/png;base64,'+base64.b64encode((ROOT/'assets/textures'/f'{name}.png').read_bytes()).decode()
         html=html.replace("'/assets/textures/"+name+".png'","'"+uri+"'")
     try:
@@ -64,7 +64,7 @@ async def check():
                       let saved=null;try{saved=localStorage.getItem('harborline.save.v1')}catch{}
                       return {loaded,initial,painted,actors,cacheExists:!!cache,cacheBytes:cache?.width*cache?.height*4,preview:thumb.startsWith('data:image/png'),saved:!!saved};
                     }''')
-                    assert sorted(result['loaded'])==['bakery','home','tree'],result
+                    assert sorted(result['loaded'])==sorted(['bakery','home','tree','harbor','farm','sawmill','grass','grass2','meadow','clover']),result
                     assert min(result['painted'].values())>700,result
                     assert result['cacheExists'] and result['cacheBytes']==1968*1134*4,result
                     assert result['preview'],result
@@ -95,7 +95,7 @@ async def check():
                   const p=c.getImageData(tree.sx+72,tree.sy+79,1,1).data;
                   return {names,pixel:Array.from(p),dirty:scene.cacheDirty};
                 }''')
-                assert sorted(degraded['names'])==['bakery','home'],degraded
+                assert sorted(degraded['names'])==sorted([n for n in ['bakery','home','harbor','farm','sawmill','grass','grass2','meadow','clover']]),degraded
                 assert not degraded['pixel']==[0,0,0,0],degraded
                 print('FALLBACK PASS',degraded)
                 await page.close()

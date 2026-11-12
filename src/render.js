@@ -5,7 +5,14 @@ const TILE_W=72, TILE_H=36, SPR_W=144, SPR_H=148;
 export const PAINTED_TEXTURES=Object.freeze({
  home:'/assets/textures/home.png',
  bakery:'/assets/textures/bakery.png',
- tree:'/assets/textures/tree.png'
+ tree:'/assets/textures/tree.png',
+ harbor:'/assets/textures/harbor.png',
+ farm:'/assets/textures/farm.png',
+ sawmill:'/assets/textures/sawmill.png',
+ grass:'/assets/textures/grass.png',
+ grass2:'/assets/textures/grass2.png',
+ meadow:'/assets/textures/meadow.png',
+ clover:'/assets/textures/clover.png'
 });
 /** Rendering-only size; the actor's world position and collision do not change. */
 export const ACTOR_SCALES=Object.freeze({neighbor:.68,neighbor2:.68,cat:.75});
@@ -559,6 +566,7 @@ function atlas(){
    const col=i%4,row=Math.floor(i/4);ctx.save();ctx.translate(col*SPR_W,row*SPR_H);paint(ctx,name);ctx.restore();cells.set(name,{sx:col*SPR_W,sy:row*SPR_H});
  }); return {canvas:c,cells};
 }
+const TERRAIN_OVERLAYS=new Set(['grass','grass2','meadow','clover']);
 /** Load images once. Preserve procedural atlas cells as a fallback if an asset fails. */
 export function loadPaintedTextures(atlas){
  if(typeof Image==='undefined')return Promise.resolve([]);
@@ -574,7 +582,7 @@ export function loadPaintedTextures(atlas){
  const c=atlas.canvas.getContext('2d');
  for(const {name,image} of successful){
    const cell=atlas.cells.get(name);if(!cell)continue;
-   c.clearRect(cell.sx,cell.sy,SPR_W,SPR_H);
+   if(!TERRAIN_OVERLAYS.has(name))c.clearRect(cell.sx,cell.sy,SPR_W,SPR_H);
    c.drawImage(image,cell.sx,cell.sy,SPR_W,SPR_H);
  }
  return successful.map(v=>v.name);

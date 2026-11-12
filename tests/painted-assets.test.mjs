@@ -7,8 +7,8 @@ import {PAINTED_TEXTURES, ACTOR_SCALES, spriteDestination} from '../src/render.j
 const root=resolve(import.meta.dirname,'..');
 
 test('first image textures are actual transparent PNG atlas cells at fixed dimensions',()=>{
- const names=['bakery','home','tree'];
- assert.deepEqual(Object.keys(PAINTED_TEXTURES).sort(),names);
+ const names=['bakery','home','tree','harbor','farm','sawmill','grass','grass2','meadow','clover'];
+ assert.deepEqual(Object.keys(PAINTED_TEXTURES).sort(),names.toSorted());
  for(const name of names){
    const path=PAINTED_TEXTURES[name];
    assert.ok(path.endsWith(`/assets/textures/${name}.png`),path);
@@ -17,7 +17,7 @@ test('first image textures are actual transparent PNG atlas cells at fixed dimen
    assert.equal(buf.readUInt32BE(16),144);
    assert.equal(buf.readUInt32BE(20),148);
    assert.equal(buf[25],6,'RGBA PNG must preserve transparency');
-   assert.ok(buf.length>3000,'a non-placeholder painted image is required');
+   assert.ok(buf.length > (['grass','grass2','meadow','clover'].includes(name)?1600:3000),'a non-placeholder painted image is required');
  }
 });
 
