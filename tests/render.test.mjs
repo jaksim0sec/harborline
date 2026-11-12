@@ -87,3 +87,19 @@ test('moving citizens are hidden only by nearby foreground tall objects', () => 
   assert.equal(visual.shouldOcclude(actor,{x:12,y:20,type:'tree'}),false);
   assert.equal(visual.shouldOcclude(actor,{x:10,y:17,type:'flowerpatch'}),false);
 });
+
+test('coastal relief follows fixed 2:1 shoreline edges without changing tile coordinates', () => {
+  assert.equal(typeof visual.coastReliefFaces, 'function');
+  const edges=visual.coastReliefFaces(15);
+  assert.deepEqual(edges.map(e=>e.bit),[1,2,4,8]);
+  const front=edges.filter(e=>e.front);
+  assert.deepEqual(front.map(e=>e.bit),[4,8]);
+  for(const face of edges){
+    assert.ok(face.a.every(Number.isFinite));
+    assert.ok(face.b.every(Number.isFinite));
+    assert.equal(face.bottom,face.front?13:0);
+  }
+  assert.deepEqual(visual.coastReliefFaces(0),[]);
+  assert.deepEqual(visual.coastReliefFaces(4).map(e=>[e.a,e.b]),[[[36,0],[0,18]]]);
+  assert.deepEqual(visual.coastReliefFaces(8).map(e=>[e.a,e.b]),[[[0,18],[-36,0]]]);
+});

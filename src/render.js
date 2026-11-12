@@ -57,6 +57,42 @@ export function shouldOcclude(actor,object){
  const dx=Math.abs(((object.x-object.y)-(actor.x-actor.y))*TILE_W/2);
  return dy>1&&dy<maxHeight&&dx<(object.type==='tree'?43:51);
 }
+/** Stable tile-local vectors. A 13px front cliff sits entirely seaward of the existing top plane. */
+export function coastReliefFaces(mask){
+ const edges=[
+  {bit:1,a:[0,-18],b:[-36,0],front:false},
+  {bit:2,a:[0,-18],b:[36,0],front:false},
+  {bit:4,a:[36,0],b:[0,18],front:true},
+  {bit:8,a:[0,18],b:[-36,0],front:true}
+ ];
+ return edges.filter(e=>mask&e.bit).map(e=>({...e,bottom:e.front?13:0}));
+}
+/** Painted once per terrain change. Bright grass on the ridge, pale limestone below. */
+function shoreRelief(c,px,py,mask){
+ for(const face of coastReliefFaces(mask)){
+  const [[ax,ay],[bx,by]]=[face.a,face.b];
+  if(!face.front){
+    line(c,[[px+ax,py+ay+1],[px+bx,py+by+1]],'rgba(89,151,112,.30)',2.3);
+    continue;
+  }
+  const side=face.bit===4;
+  const main=side?'#a7ad97':'#c0bda1';
+  const shade=side?'#829d91':'#9ba995';
+  // Seaward face is a bevel, not a higher tile; feet and click targets remain untouched.
+  poly(c,[[px+ax,py+ay],[px+bx,py+by],[px+bx,py+by+13],[px+ax,py+ay+13]],main,shade,.8);
+  line(c,[[px+ax,py+ay+5],[px+bx,py+by+5]],side?'rgba(241,223,174,.56)':'rgba(250,231,195,.65)',1.35);
+  line(c,[[px+ax,py+ay+9],[px+bx,py+by+9]],'rgba(111,147,122,.30)',1.7);
+  // Short seams and sparse lichen break up continuous slab-like bands.
+  for(const t of [.24,.71]){
+   const x=px+ax+(bx-ax)*t,y=py+ay+(by-ay)*t;
+   line(c,[[x,y+5],[x-1.2,y+10]],'rgba(119,116,91,.32)',.85);
+   ellipse(c,x+3,y+7,2.8,1.1,'rgba(101,160,113,.42)');
+  }
+  line(c,[[px+ax,py+ay],[px+bx,py+by]],'#e3d7b5',2.2);
+  // Sea foam is below the stone toe and never crosses the buildable tile.
+  line(c,[[px+ax+2,py+ay+15],[px+bx-2,py+by+15]],'rgba(233,247,229,.51)',1.9);
+ }
+}
 /** Decorative shoreline strokes are painted into the static map only. */
 function shoreline(c,px,py,mask){
  const edges=[
@@ -502,8 +538,14 @@ export class Scene {
    const y=depth-x;if(!inBounds(x,y))continue;
    const p=this.tileCenter(x,y);
    this.sprite(c,groundTexture(x,y,terrain(x,y,this.game)),p.x,p.y);
-   const mask=coastEdgeMask(this.game,x,y);
-   if(mask)shoreline(c,p.x,p.y,mask);
+  }
+  // Relief overlays render after the entire terrain: the next water tile must not erase cliffs.
+  for(let depth=0;depth<(SIZE-1)*2+1;depth++)for(let x=0;x<SIZE;x++){
+   const y=depth-x;if(!inBounds(x,y))continue;
+   const mask=coastEdgeMask(this.game,x,y);if(!mask)continue;
+   const p=this.tileCenter(x,y);
+   shoreRelief(c,p.x,p.y,mask);
+   shoreline(c,p.x,p.y,mask);
   }
   const roadKeys=new Set(this.game.roads.map(r=>`${r.x},${r.y}`));
   for(const r of this.game.roads){const p=this.tileCenter(r.x,r.y);this.sprite(c,`road-${roadMask(roadKeys,r.x,r.y)}`,p.x,p.y);}
