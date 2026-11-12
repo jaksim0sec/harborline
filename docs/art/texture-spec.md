@@ -21,12 +21,14 @@
 - No additional atlas cells, new map areas, state or save keys. Existing mobile resident scale 0.68 and cat 0.75 remain until actual scene-scale comparison warrants a change. 
 - Release acceptance includes all test assets loaded at 1365/390/360px; ship only a reviewed one-commit change.
 
+## v0.15.2 · source-side matte correction
 
-## v0.15 final release and transport validation
+The six hand-cut props (harbor, farm, sawmill, home, bakery, tree) had a real **opaque paper-white border**, not just a Canvas sampling issue. Do not confuse it with white architectural details.
 
-- Seven second-pass image cells are committed as **actual binary PNG files**, not UTF-8 strings or screenshots. A GitHub Git-blob SHA is computed over `blob <byte length>\0<original bytes>` and checked before inserting each image into the target tree.
-- Never pass decoded arbitrary PNG bytes to the UTF-8 GitHub blob API. Use `encoding: base64` and compare each returned SHA with `git hash-object <asset>.png`. Abort the `main` ref update on any mismatch.
-- Farm first-pass resembled a flower garden; the release-grade candidate retains the existing fence and brush texture but warms foliage into golden wheat heads. Sawmill first-pass resembled a forge; the release-grade candidate adds a muted circular saw and stacked timber while preserving its original exterior.
-- Both revisions preserve 144×148 RGBA, 2:1 perspective and ground anchor `(72,103)`. They intentionally do not add collider, build cost, resource type, or saved fields.
-- Existing procedural fallback on failed image loads is unchanged. Rendering still composites ten PNGs once into existing atlas cells, and static game map cache sizes must be measured in Chromium.
-- Tradeoff: retouched sprites still reuse first-pass art sources, and the harbor's relative perspective and the field's stylization require a later true master-art production pass.
+- Correct the **source PNG alpha**: contour whiteness is measured only close to transparent pixels, then partial pixels borrow hue from nearby colored interiors. Colored roof/window details away from the contour remain untouched.
+- Harbor/farm/sawmill also contain broader pale paper-floor cutouts below the subject; remove these selectively by a bottom-region profile instead of painting the paper grass-green.
+- Fixed export: **144×148 RGBA PNG** with the existing ground anchor `(72,103)`, shared 2:1 perspective, top-left light, and no white opaque contour.
+- Reproducible edit: `python3 tools/repair_texture_edges.py --input-dir <original-assets> --output-dir assets/textures`. Requires Pillow, NumPy, SciPy **for art production only**, not at game runtime. The input must be an uncorrected checkout, never feed cleaned files into the tool again.
+- Release gate: `python3 -m unittest discover -s tests -p texture_fringe_test.py -v` checks source alpha, plus `npm run check` and `python3 tests/painted_assets_e2e.py`.
+- Keep the existing runtime `dematteOutline` and procedural fallback for older or broken texture inputs; the cleaned source now provides the primary fix. No extra raster work is performed per frame.
+- Grounding improvement: removing the artificially solid white bottom slab lets the real terrain/water show beneath structures. It does **not** add simulated height, physics, or new buildings.
