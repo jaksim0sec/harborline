@@ -11,6 +11,22 @@ async def check():
   page=await browser.new_page(viewport={'width':1365,'height':820})
   errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   await page.set_content(html)
+  # The map must extend behind separate small HUD islands, not begin under a full-width header.
+  layout=await page.evaluate('''() => {const box=s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height}};return {stage:box('.stage'),top:box('.topbar'),identity:box('.identity'),actions:box('.header-actions'),resources:box('.left-hud'),orders:box('.mobile-orders'),bg:getComputedStyle(document.querySelector('.topbar')).backgroundColor};}''')
+  assert layout['stage']['y']==0 and layout['stage']['height']>=819,layout
+  assert layout['bg'] in ('rgba(0, 0, 0, 0)','transparent'),layout
+  assert layout['resources']['y']>=layout['identity']['bottom']+6,layout
+  assert layout['orders']['y']>=layout['actions']['bottom']+6,layout
+  # Header controls remain functional after the header becomes an overlay.
+  await page.locator('#pauseBtn').click()
+  assert await page.locator('#pauseBtn').get_attribute('aria-label')=='시간 재개'
+  await page.locator('#speedBtn').click()
+  assert await page.locator('#speedBtn').inner_text()=='×2'
+  await page.locator('#helpBtn').click()
+  assert await page.locator('#helpDialog').is_visible()
+  await page.locator('#helpOkay').click()
+  await page.locator('#pauseBtn').click()
+  await page.locator('#speedBtn').click()
   # The map stays unobscured until players explicitly open deliveries.
   assert not await page.locator('#ordersPanel').is_visible(), 'desktop delivery panel must start collapsed'
   assert await page.locator('#mobileOrders').is_visible(), 'delivery toggle should always be accessible'
@@ -25,6 +41,13 @@ async def check():
   assert tile['tile']=={'x':12,'y':17},tile
   await page.locator('[data-tool="farm"]').click()
   box=await page.locator('#world').bounding_box(); target=tile['screen']
+  await page.mouse.move(box['x']+target['x'],box['y']+target['y'])
+  assert await page.locator('#toolHint').get_attribute('data-placement')=='linked','connected placement should preview link'
+  assert '항구 연결' in await page.locator('#toolHint').inner_text()
+  far=await page.evaluate('scene.worldToScreen(16,10)')
+  await page.mouse.move(box['x']+far['x'],box['y']+far['y'])
+  assert await page.locator('#toolHint').get_attribute('data-placement')=='unlinked','isolated placement should warn before building'
+  await page.mouse.move(box['x']+target['x'],box['y']+target['y'])
   await page.mouse.click(box['x']+target['x'],box['y']+target['y'])
   assert await page.locator('#coin').inner_text()=='315',await page.locator('#coin').inner_text()
   assert (await page.locator('#toast').inner_text()).startswith('햇살 밭 완성')
@@ -46,6 +69,10 @@ async def check():
   print('desktop e2e: OK, avg render ms/frame=',round(duration,2),'errors=',errors)
   await page.set_viewport_size({'width':390,'height':844});await page.wait_for_timeout(350)
   village=await page.evaluate('''() => ({harbor:scene.worldToScreen(9,21), bakery:scene.worldToScreen(11,17), width:scene.width})''')
+  mobileLayout=await page.evaluate('''() => {const b=s=>{const r=document.querySelector(s).getBoundingClientRect();return {y:r.y,bottom:r.bottom,right:r.right,x:r.x,height:r.height}};return {stage:b('.stage'),identity:b('.identity'),actions:b('.header-actions'),resources:b('.left-hud'),orders:b('.mobile-orders')}}''')
+  assert mobileLayout['stage']['y']==0,mobileLayout
+  assert mobileLayout['resources']['y']>=mobileLayout['identity']['bottom']+6,mobileLayout
+  assert mobileLayout['orders']['y']>=mobileLayout['resources']['bottom']+4,mobileLayout
   assert village['harbor']['x']>55, 'mobile harbor clipped: '+str(village)
   assert village['bakery']['x']<village['width']-40, 'mobile bakery clipped: '+str(village)
   previews=await page.locator('.tool-art img').count()
@@ -61,6 +88,8 @@ async def check():
   await page.wait_for_timeout(150)
   assert (await page.locator('.buildbar').bounding_box())['x']>=0
   assert await page.locator('#mobileOrders').is_visible()
+  await page.locator('[data-tool="farm"]').click()
+  assert await page.locator('#toolHint').is_visible(),'mobile construction must show a compact instruction'
   print('narrow mobile 360px: OK')
   assert not errors,errors
   await browser.close()

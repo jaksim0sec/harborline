@@ -1,4 +1,4 @@
-import { SIZE, inBounds, isLand, terrain, occupied, connections } from './model.js';
+import { SIZE, inBounds, isLand, terrain, connections, evaluatePlacement } from './model.js';
 
 const TILE_W=72, TILE_H=36, SPR_W=144, SPR_H=148;
 const names=['water','grass','grass2','sand','road','farm','sawmill','bakery','home','garden','harbor','tree','bush','boat','neighbor','neighbor2','cat','lighthouse','dockpost','flowerpatch','rock'];
@@ -174,7 +174,7 @@ export class Scene {
  }
  resetView(){
   this.zoom=this.width<690?.94:this.width<1000?1.08:1.36;
-  this.pan.x=this.width<690?this.width*.75:Math.min(350,this.width*.26);
+  this.pan.x=this.width<690?this.width*.75+32:Math.min(350,this.width*.26);
   this.pan.y=this.width<690?-52:-12;
  }
  invalidate(){this.cacheDirty=true;}
@@ -220,9 +220,10 @@ export class Scene {
     const valid=[];for(const p of steps){if(!roadSet.has(`${p.x},${p.y}`))break;valid.push(p);}return valid;
   };
   this.walkPaths=[contiguous(path),contiguous(branch)];
+  this.connectedRoads=roadSet;
   this.cache=cache;this.cacheDirty=false;
  }
- getCenter(){return {x:this.width*(this.width>=900?.46:.50)+this.pan.x,y:this.height*.51+this.pan.y};}
+ getCenter(){return {x:this.width*(this.width>=900?.46:.50)+this.pan.x,y:this.height*.55+this.pan.y};}
  worldToScreen(x,y){const center=this.getCenter();return {x:center.x+((x-y)*TILE_W/2)*this.zoom,y:center.y+((x+y)*TILE_H/2-(SIZE-1)*TILE_H/2)*this.zoom};}
  screenToTile(sx,sy){const center=this.getCenter();const u=(sx-center.x)/this.zoom;const v=(sy-center.y)/this.zoom+(SIZE-1)*TILE_H/2;
   const x=Math.round((u/(TILE_W/2)+v/(TILE_H/2))/2),y=Math.round((v/(TILE_H/2)-u/(TILE_W/2))/2);
@@ -244,6 +245,17 @@ export class Scene {
   if(this.cacheDirty)this.buildCache();
   const center=this.getCenter();c.save();c.translate(center.x,center.y);c.scale(this.zoom,this.zoom);
   c.drawImage(this.cache,-this.OX,-this.OY-(SIZE-1)*TILE_H/2);
+  // Highlight the cached harbor-connected road network only in road mode.
+  if(this.tool==='road' && this.connectedRoads){
+    c.save();
+    for(const k of this.connectedRoads){
+      const [x,y]=k.split(',').map(Number);
+      const px=(x-y)*TILE_W/2,py=(x+y)*TILE_H/2-(SIZE-1)*TILE_H/2;
+      ellipse(c,px,py,3.5,2.2,'rgba(55,120,98,.62)');
+      ellipse(c,px,py,1.4,1,'rgba(251,251,218,.95)');
+    }
+    c.restore();
+  }
   const waterX=9,waterY=23;
   const boatX=(waterX-waterY)*TILE_W/2+(Math.sin(this.animationTime*.0004)*7),boatY=(waterX+waterY)*TILE_H/2-(SIZE-1)*TILE_H/2+Math.sin(this.animationTime*.0016)*2;
   this.sprite(c,'boat',boatX,boatY);
@@ -257,8 +269,10 @@ export class Scene {
   }
   if(this.hover&&inBounds(this.hover.x,this.hover.y)){
     const {x,y}=this.hover;const px=(x-y)*TILE_W/2,py=(x+y)*TILE_H/2-(SIZE-1)*TILE_H/2;
-    const valid=isLand(x,y)&&!occupied(this.game,x,y);
-    c.save();c.globalAlpha=.86;diamond(c,px,py,35,17,this.tool==='inspect'?'rgba(246,248,224,.20)':valid?'rgba(248,237,174,.45)':'rgba(238,137,122,.37)',valid?'#fff9d7':'#eb8e86');c.restore();
+    const preview=this.tool==='inspect'?null:evaluatePlacement(this.game,this.tool,x,y);
+    const fill=!preview?'rgba(246,248,224,.20)':!preview.ok?'rgba(228,114,94,.40)':preview.linked?'rgba(91,181,136,.40)':'rgba(247,190,94,.40)';
+    const stroke=!preview?'#fff9d7':!preview.ok?'#d96860':preview.linked?'#d1f9e2':'#ffebbb';
+    c.save();c.globalAlpha=.92;diamond(c,px,py,35,17,fill,stroke);c.restore();
   }
   c.restore();this.t=time;
  }

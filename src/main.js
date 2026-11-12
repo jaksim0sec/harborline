@@ -1,4 +1,4 @@
-import { createGame, hydrate, DAY_MS, SAVE_KEY, ITEMS, connections, place, remove, advanceDay, deliver, population, occupied } from './model.js';
+import { createGame, hydrate, DAY_MS, SAVE_KEY, ITEMS, connections, place, remove, advanceDay, deliver, population, occupied, evaluatePlacement } from './model.js';
 import { Scene } from './render.js';
 
 const $=s=>document.querySelector(s), canvas=$('#world');
@@ -12,7 +12,15 @@ const fmt=n=>new Intl.NumberFormat('ko-KR').format(n);
 const resources={grain:{name:'햇밀',icon:'🌾'},wood:{name:'목재',icon:'🪵'},bread:{name:'빵',icon:'🥐'}};
 function save(){try {localStorage.setItem(SAVE_KEY,JSON.stringify(game));}catch{}}
 function toast(message){const el=$('#toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2500);}
-function setTool(name){selected=name;scene.tool=name;scene.hover=null;inspectAt=null;$('#inspectCard').hidden=true;canvas.classList.toggle('building',name!=='inspect');renderTools();$('#toolHint').textContent=name==='inspect'?'건물을 누르면 정보를 볼 수 있어요':`${ITEMS[name].name} · 빈 땅을 눌러 지으세요`;}
+function showPlacementHint(tile=null){
+ const hint=$('#toolHint');hint.classList.toggle('building',selected!=='inspect');
+ if(selected==='inspect'){hint.dataset.placement='inspect';hint.textContent='건물을 누르면 정보를 볼 수 있어요';return;}
+ const preview=tile?evaluatePlacement(game,selected,tile.x,tile.y):null;
+ if(!preview){hint.dataset.placement='idle';hint.textContent=`${ITEMS[selected].name} · 빈 땅을 고르세요`;return;}
+ hint.dataset.placement=preview.ok?(preview.linked?'linked':'unlinked'):'blocked';
+ hint.textContent=preview.ok?(preview.linked?'✓ 항구 연결 가능 · 설치할 수 있어요':'산책길 연결 필요 · 설치할 수 있어요'):preview.message;
+}
+function setTool(name){selected=name;scene.tool=name;scene.hover=null;inspectAt=null;$('#inspectCard').hidden=true;canvas.classList.toggle('building',name!=='inspect');renderTools();showPlacementHint();}
 function renderTools(){const tools=[['inspect',{name:'둘러보기',icon:'⌕',coin:null,wood:0}],...Object.entries(ITEMS)];
  $('#buildTools').innerHTML=tools.map(([key,item],i)=>`<button class="tool ${selected===key?'selected':''}" data-tool="${key}" type="button" title="${esc(item.description||'지도를 이동하고 건물을 살펴봐요')}" aria-pressed="${selected===key}"><span class="tool-art" aria-hidden="true">${key==='inspect'?'<span class="inspect-icon">⌕</span>':`<img src="${scene.toolPreview(key)}" alt="" width="48" height="48">`}</span><span class="tool-name">${item.name}</span><span class="tool-cost">${item.coin===null?'이동 · 정보':`${item.coin}코인${item.wood?` · 목재${item.wood}`:''}`}</span></button>`).join('');
 }
@@ -35,7 +43,7 @@ function renderHUD(){
  $('#festivalHint').textContent=game.celebrated?'축제를 열었어요! 원하는 만큼 마을을 더 가꿔요':'배달 6번을 마치면 마을에 축제가 열려요';
  $('#guideText').innerHTML=game.completed===0?'아래에서 건물을 고르고 빈 땅을 톡!<br>산책길로 항구에 연결하면 일을 시작해요':game.completed<6?`지금까지 배달 ${game.completed}번 성공!<br>조금씩 커지는 마을을 즐겨보세요`:'첫 축제를 열었어요!<br>이제 당신만의 마을을 더 가꿔봐요';
 }
-function changed(){scene.invalidate();renderHUD();save();if(inspectAt)showInspect(inspectAt.x,inspectAt.y);}
+function changed(){scene.invalidate();renderHUD();save();showPlacementHint(scene.hover);if(inspectAt)showInspect(inspectAt.x,inspectAt.y);}
 function showInspect(x,y){
  const panel=$('#inspectCard');const building=game.buildings.find(b=>b.x===x&&b.y===y);const road=game.roads.find(r=>r.x===x&&r.y===y);
  if(!building&&!road){panel.hidden=true;inspectAt=null;return;}
@@ -72,12 +80,12 @@ canvas.addEventListener('pointermove',e=>{
   else if(pointers.size===2){pointers.set(e.pointerId,p);const[a,b]=[...pointers.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);if(pinch>0)scene.zoomAt(d/pinch,(a.x+b.x)/2,(a.y+b.y)/2);pinch=d;dragDistance=100;}
   pointers.set(e.pointerId,p);
  }
- if(!pointers.size||dragDistance<=5)scene.hover=scene.screenToTile(p.x,p.y);
+ if(!pointers.size||dragDistance<=5){scene.hover=scene.screenToTile(p.x,p.y);showPlacementHint(scene.hover);}
 });
 function endPointer(e){const p=canvasCoords(e);const was=dragDistance;pointers.delete(e.pointerId);canvas.classList.remove('dragging');pinch=0;if(!was&&pointers.size===0){const tile=scene.screenToTile(p.x,p.y);if(tile)onTile(tile.x,tile.y);}if(pointers.size===0)dragDistance=0;}
 canvas.addEventListener('pointerup',endPointer);
 canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);canvas.classList.remove('dragging');dragDistance=0;});
-canvas.addEventListener('pointerleave',()=>{if(!pointers.size)scene.hover=null;});
+canvas.addEventListener('pointerleave',()=>{if(!pointers.size){scene.hover=null;showPlacementHint();}});
 canvas.addEventListener('wheel',e=>{e.preventDefault();const p=canvasCoords(e);scene.zoomAt(Math.exp(-e.deltaY*.001),p.x,p.y);if(inspectAt)showInspect(inspectAt.x,inspectAt.y);},{passive:false});
 $('#buildTools').addEventListener('click',e=>{const button=e.target.closest('[data-tool]');if(button)setTool(button.dataset.tool);});
 $('#orderList').addEventListener('click',e=>{const b=e.target.closest('[data-order]');if(!b)return;const result=deliver(game,Number(b.dataset.order));toast(result.message);if(result.ok){changed();if(result.festival)$('#helpBtn').classList.add('celebrated');}});

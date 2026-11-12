@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, connections, place, remove, advanceDay, deliver, hydrate, isLand, terrain, population } from '../src/model.js';
+import { createGame, connections, place, remove, advanceDay, deliver, hydrate, isLand, terrain, population, evaluatePlacement } from '../src/model.js';
 
 test('starter village is connected and has a production loop', () => {
  const g=createGame(); const c=connections(g);
@@ -58,4 +58,31 @@ test('save hydration ignores incompatible saves and preserves normal game data',
  const restored=hydrate(JSON.parse(JSON.stringify(g)));
  assert.equal(restored.day,2); assert.deepEqual(restored.resources,g.resources);
  assert.equal(hydrate({version:2}).day,1); assert.equal(terrain(0,0),'water');
+});
+
+
+test('placement preview is pure and matches actual placement and road connection', () => {
+ const g=createGame();
+ const before=JSON.stringify(g);
+ const adjacent=evaluatePlacement(g,'farm',12,17);
+ assert.equal(adjacent.ok,true);
+ assert.equal(adjacent.linked,true);
+ const isolated=evaluatePlacement(g,'farm',16,10);
+ assert.equal(isolated.ok,true);
+ assert.equal(isolated.linked,false);
+ const nextRoad=evaluatePlacement(g,'road',13,18);
+ assert.equal(nextRoad.ok,true);
+ assert.equal(nextRoad.linked,true);
+ assert.equal(JSON.stringify(g),before,'preview must never deduct resources or create a structure');
+ assert.equal(place(g,'farm',12,17).linked,adjacent.linked);
+});
+
+test('placement preview distinguishes sea, occupied and insufficient material',()=>{
+ const g=createGame();
+ assert.match(evaluatePlacement(g,'home',0,0).message,/바다/);
+ assert.match(evaluatePlacement(g,'home',9,21).message,/사용 중/);
+ g.resources.wood=0;
+ const result=evaluatePlacement(g,'home',12,17);
+ assert.equal(result.ok,false);
+ assert.match(result.message,/부족/);
 });

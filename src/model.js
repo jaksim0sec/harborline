@@ -74,17 +74,31 @@ export function connections(game) {
   });
   return { roads: reachable, buildings };
 }
+const neighbors = (x,y) => [[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dy])=>key(x+dx,y+dy));
+
+/** Placement feedback only. Does not charge resources or mutate the game. */
+export function evaluatePlacement(game,type,x,y){
+  if (!ITEMS[type]) return {ok:false,linked:false,message:'알 수 없는 건물이에요'};
+  if (!isLand(x,y)) return {ok:false,linked:false,message:'바다 위에는 지을 수 없어요'};
+  if (occupied(game,x,y)) return {ok:false,linked:false,message:'이미 사용 중인 자리예요'};
+  const item=ITEMS[type];
+  if (game.resources.coin < item.coin || game.resources.wood < item.wood)
+    return {ok:false,linked:false,message:'코인이나 목재가 부족해요'};
+  const nearby=neighbors(x,y),network=connections(game);
+  const linked=type==='road'
+    ? nearby.some(k=>network.roads.has(k) || game.buildings.some(b=>b.type==='harbor'&&key(b.x,b.y)===k))
+    : nearby.some(k=>network.roads.has(k));
+  return {ok:true,linked,message:linked?`${item.name} 완성!`:`${item.name} 완성! 산책길로 항구와 이어주세요`};
+}
+
 export function place(game, type, x, y) {
-  if (!ITEMS[type]) return { ok: false, message: '알 수 없는 건물이에요' };
-  if (!isLand(x, y)) return { ok: false, message: '바다 위에는 지을 수 없어요' };
-  if (occupied(game, x, y)) return { ok: false, message: '이미 사용 중인 자리예요' };
-  const item = ITEMS[type];
-  if (game.resources.coin < item.coin || game.resources.wood < item.wood) return { ok: false, message: '코인이나 목재가 부족해요' };
-  game.resources.coin -= item.coin;
-  game.resources.wood -= item.wood;
-  if (type === 'road') game.roads.push({ x, y }); else game.buildings.push({ type, x, y });
-  const linked = type === 'road' ? connections(game).roads.has(key(x,y)) : connections(game).buildings.has(key(x,y));
-  return { ok: true, linked, message: linked ? `${item.name} 완성!` : `${item.name} 완성! 산책길로 항구와 이어주세요` };
+  const preview=evaluatePlacement(game,type,x,y);
+  if(!preview.ok)return {ok:false,message:preview.message};
+  const item=ITEMS[type];
+  game.resources.coin-=item.coin;
+  game.resources.wood-=item.wood;
+  if(type==='road')game.roads.push({x,y}); else game.buildings.push({type,x,y});
+  return preview;
 }
 export function remove(game, x, y) {
   const index = game.buildings.findIndex(b => b.x === x && b.y === y && b.type !== 'harbor');
