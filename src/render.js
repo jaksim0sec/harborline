@@ -1,7 +1,7 @@
 import { SIZE, inBounds, isLand, terrain, connections, evaluatePlacement, routeToBuilding, workplaceForOrder } from './model.js';
 
 const TILE_W=72, TILE_H=36, SPR_W=144, SPR_H=148;
-const names=['water','grass','grass2','meadow','clover','sand','road','farm','sawmill','bakery','home','garden','harbor','tree','bush','boat','neighbor','neighbor2','cat','lighthouse','dockpost','flowerpatch','rock',...Array.from({length:16},(_,i)=>`road-${i}`)];
+const names=['water','grass','grass2','meadow','clover','sand','road','farm','sawmill','bakery','home','garden','harbor','tree','bush','boat','neighbor','neighbor2','cat','lighthouse','dockpost','flowerpatch','rock','squareFountain',...Array.from({length:16},(_,i)=>`road-${i}`)];
 const makeCanvas=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
 const poly=(c,points,fill,stroke,line=1)=>{c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.closePath();if(fill){c.fillStyle=fill;c.fill();}if(stroke){c.strokeStyle=stroke;c.lineWidth=line;c.stroke();}};
 const ellipse=(c,x,y,rx,ry,fill)=>{c.beginPath();c.ellipse(x,y,rx,ry,0,0,Math.PI*2);c.fillStyle=fill;c.fill();};
@@ -43,6 +43,21 @@ export function isVillagePlaza(roadKeys,x,y){
  const m=roadMask(roadKeys,x,y);
  return (m.toString(2).match(/1/g)||[]).length>=3;
 }
+/** Visual-only village heart: pick one reachable junction, never reserve a build tile. */
+export function selectVillageSquare(game){
+ const harbor=game.buildings.find(b=>b.type==='harbor');
+ if(!harbor)return null;
+ const keys=new Set(game.roads.map(r=>`${r.x},${r.y}`));
+ const reachable=connections(game).roads;
+ let best=null,score=Infinity;
+ for(const {x,y} of game.roads){
+   if(!reachable.has(`${x},${y}`)||!isVillagePlaza(keys,x,y))continue;
+   const dist=Math.abs(harbor.x-x)+Math.abs(harbor.y-y);
+   const rank=dist*SIZE*SIZE+x*SIZE+y;
+   if(rank<score){score=rank;best={x,y};}
+ }
+ return best;
+}
 /** The same orthogonal neighbours have different projected screen edges. */
 export function coastEdgeMask(game,x,y){
  if(!inBounds(x,y)||terrain(x,y,game)!=='sand')return 0;
@@ -51,7 +66,7 @@ export function coastEdgeMask(game,x,y){
 }
 /** Only nearby tall props in front of a moving actor may cover it. */
 export function shouldOcclude(actor,object){
- const reach={tree:86,home:82,bakery:82,sawmill:82,harbor:82,lighthouse:100};
+ const reach={tree:86,home:82,bakery:82,sawmill:82,harbor:82,lighthouse:100,squareFountain:42};
  const maxHeight=reach[object.type];if(!maxHeight)return false;
  const dy=((object.x+object.y)-(actor.x+actor.y))*TILE_H/2;
  const dx=Math.abs(((object.x-object.y)-(actor.x-actor.y))*TILE_W/2);
@@ -328,6 +343,36 @@ function paint(c,name){
    poly(c,[[108,53],[124,59],[108,65]],'#dba27e');
    ellipse(c,107,51,3,3,'#f4e6c5');
  }
+ if(name==='squareFountain'){
+   // A single road-junction landmark. All faces use the shared 2:1 ground plane.
+   ellipse(c,72,109,27,7,'rgba(45,88,74,.21)');
+   poly(c,[[45,100],[72,114],[72,119],[45,105]],'#d9c8a5','#b5a487',.9);
+   poly(c,[[72,114],[99,100],[99,105],[72,119]],'#aeb9ac','#8b9d90',.9);
+   diamond(c,72,100,27,14,'#f1e4c8','#d4c3a5');
+   for(const [x,y] of [[48,99],[95,101]]){
+     ellipse(c,x,y+3,5,2.8,'rgba(71,105,74,.22)');
+     ellipse(c,x,y,5.3,3.5,'#9aaf8a');
+     ellipse(c,x-2,y-2,3.4,2.4,'#f6d6bc');
+     ellipse(c,x+2,y-2,3.2,2.4,'#f7ead3');
+     ellipse(c,x,y-2,.9,.9,'#e5ab6a');
+   }
+   // The basin's warm limestone back lip is visible above the cool water.
+   ellipse(c,72,93,21,9,'#c9bfa8');
+   poly(c,[[51,93],[72,103],[93,93],[93,101],[72,110],[51,101]],'#b4b6a4','#979c92',.9);
+   ellipse(c,72,91,20,8,'#eee0c4');
+   ellipse(c,72,90,15.5,5.9,'#7bb4b5');
+   ellipse(c,72,89,12.5,4.3,'#9ad4d1');
+   // One short water spout and two falling threads, not a simulated fountain system.
+   poly(c,[[69,88],[69,73],[72,70],[75,73],[75,88],[72,90]],'#e7d6b7','#b8b7a0',.8);
+   ellipse(c,72,71,5.4,2.6,'#f1e6ce');
+   ellipse(c,72,69,3,1.8,'#c58d77');
+   ellipse(c,72,67,1.3,2,'#f4e7cf');
+   line(c,[[67,74],[62,80],[62,86]],'rgba(204,241,235,.92)',1.7);
+   line(c,[[77,74],[82,79],[82,85]],'rgba(210,243,235,.82)',1.7);
+   ellipse(c,62,87,2.5,1.2,'#d0efdf');ellipse(c,82,86,2.4,1.1,'#d0efdf');
+   // Delicate petals distinguish the landmark from a generic stone well.
+   ellipse(c,72,68,2.2,1.4,'#f4b5a1');ellipse(c,70.5,69,1.4,1.3,'#fff3d5');
+ }
  if(name==='tree'){
    shadow(c,20);
    // A two-face trunk keeps the same top-left light direction as the houses.
@@ -556,11 +601,13 @@ export class Scene {
     const type=sceneryAt(this.game,x,y,used);
     if(type)props.push({x,y,type});
   }
+  const square=selectVillageSquare(this.game);
+  if(square)props.push({...square,type:'squareFountain'});
   if(!used.has('5,18'))props.push({x:5,y:18,type:'lighthouse'});
   // 방파제의 작은 말뚝은 물 위 장식으로만 놓인다.
   if(!used.has('7,21'))props.push({x:7,y:21,type:'dockpost'});
   const all=[...props,...this.game.buildings];all.sort((a,b)=>(a.x+a.y)-(b.x+b.y)||a.x-b.x);
-  this.occluders=all.filter(o=>['tree','home','sawmill','bakery','harbor','lighthouse'].includes(o.type));
+  this.occluders=all.filter(o=>['tree','home','sawmill','bakery','harbor','lighthouse','squareFountain'].includes(o.type));
   for(const item of all){const p=this.tileCenter(item.x,item.y);this.sprite(c,item.type,p.x,p.y);}
   // 항구 주변의 작은 오브젝트는 정적 아틀라스로 단 한 번만 렌더링한다.
 
