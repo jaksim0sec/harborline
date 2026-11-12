@@ -11,6 +11,16 @@ async def check():
   page=await browser.new_page(viewport={'width':1365,'height':820})
   errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   await page.set_content(html)
+  # The map stays unobscured until players explicitly open deliveries.
+  assert not await page.locator('#ordersPanel').is_visible(), 'desktop delivery panel must start collapsed'
+  assert await page.locator('#mobileOrders').is_visible(), 'delivery toggle should always be accessible'
+  bar=await page.locator('.buildbar').bounding_box()
+  assert bar['height']<=115, 'build bar unnecessarily covers the map: '+str(bar)
+  await page.locator('#mobileOrders').click()
+  assert await page.locator('#ordersPanel').is_visible()
+  assert await page.locator('#mobileOrders').get_attribute('aria-expanded')=='true'
+  await page.locator('#closeOrders').click()
+  assert not await page.locator('#ordersPanel').is_visible()
   tile=await page.evaluate('''() => ({screen:scene.worldToScreen(12,17), tile:scene.screenToTile(scene.worldToScreen(12,17).x,scene.worldToScreen(12,17).y), coin:game.resources.coin })''')
   assert tile['tile']=={'x':12,'y':17},tile
   await page.locator('[data-tool="farm"]').click()
@@ -26,9 +36,12 @@ async def check():
   await page.locator('#inspectRemove').click()
   assert await page.evaluate('game.buildings.length')==5
   await page.evaluate('''() => {game.resources.grain=12;renderHUD()}''')
+  await page.locator('#mobileOrders').click()
   await page.locator('[data-order="0"]').click()
   assert await page.evaluate('game.completed')==1
   assert await page.locator('#festivalLabel').inner_text()=='1 / 6'
+  await page.keyboard.press('Escape')
+  assert not await page.locator('#ordersPanel').is_visible(), 'Escape should return to the map'
   duration=await page.evaluate('''() => {let t=performance.now();for(let i=0;i<80;i++) scene.render(t+i*32);return (performance.now()-t)/80;}''')
   print('desktop e2e: OK, avg render ms/frame=',round(duration,2),'errors=',errors)
   await page.set_viewport_size({'width':390,'height':844});await page.wait_for_timeout(350)
@@ -43,6 +56,7 @@ async def check():
   await page.locator('#mobileOrders').click()
   assert await page.locator('#ordersPanel').is_visible()
   print('mobile layout: OK, panel visible')
+  await page.locator('#closeOrders').click()
   await page.set_viewport_size({'width':360,'height':740})
   await page.wait_for_timeout(150)
   assert (await page.locator('.buildbar').bounding_box())['x']>=0

@@ -38,9 +38,18 @@ function ground(c,name){
   }
 }
 function shadow(c,size=26){ellipse(c,72,103,size,10,'rgba(53,79,67,.18)');}
+// One shared contact plane for every hut; body front wall ends at y=103.
+export const BUILDING_BASE=Object.freeze({centerX:72,centerY:92,halfWidth:30,halfHeight:16,wallFrontY:103,lip:4});
+function foundation(c){
+ const {centerX:x,centerY:y,halfWidth:w,halfHeight:h,lip}=BUILDING_BASE;
+ ellipse(c,x,y+h-1,w+3,9,'rgba(44,76,67,.26)');
+ poly(c,[[x-w,y],[x,y+h],[x,y+h+lip],[x-w,y+lip]],'#c7b99c','#b7a888',.6);
+ poly(c,[[x,y+h],[x+w,y],[x+w,y+lip],[x,y+h+lip]],'#b5b29a','#aa9d87',.6);
+ diamond(c,x,y,w,h,'#e5dcc5','#c4b69b');
+}
 function walls(c,opt={}){
- const {left='#ead3aa',right='#f9e3bb',roofLeft='#83acac',roofRight='#689b9a',roofTop=31}=opt;
- shadow(c,28);
+ const {left='#ead3aa',right='#f9e3bb',roofLeft='#83acac',roofRight='#689b9a',roofTop=31,base=true}=opt;
+ if(base)foundation(c);else shadow(c,28);
  poly(c,[[46,59],[72,73],[72,103],[46,88]],left,'#a6937e',.7);
  poly(c,[[72,73],[99,59],[99,87],[72,103]],right,'#a6937e',.7);
  poly(c,[[41,58],[72,roofTop],[72,73],[41,62]],roofLeft,'#547779',.8);
@@ -111,7 +120,7 @@ function paint(c,name){
    shadow(c,32);
    diamond(c,72,101,33,17,'#9e765c','#785944');
    for(let i=0;i<5;i++)line(c,[[43+i*9,86+i*4.5],[72+i*8/2,103+i*.6]],'#b99274',1.5);
-   walls(c,{left:'#e2bd97',right:'#f2d8b8',roofLeft:'#a9a58b',roofRight:'#918f78',roofTop:32});
+   walls(c,{left:'#e2bd97',right:'#f2d8b8',roofLeft:'#a9a58b',roofRight:'#918f78',roofTop:32,base:false});
    sign(c,'港',53,74,'#fff4db','#77644f',9);
    line(c,[[107,99],[107,52]],'#87705d',2.2);
    poly(c,[[108,53],[124,59],[108,65]],'#dba27e');

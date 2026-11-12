@@ -105,7 +105,7 @@ document.addEventListener('keydown',e=>{
  const names=['inspect',...Object.keys(ITEMS)];
  if(/^[1-7]$/.test(e.key)){setTool(names[Number(e.key)-1]);return;}
  if(e.code==='Space'){e.preventDefault();$('#pauseBtn').click();}
- if(e.key==='Escape')setTool('inspect');
+ if(e.key==='Escape'){if(panel.classList.contains('open'))toggleOrders(false);else setTool('inspect');}
  if(e.key==='+')scene.zoomAt(1.18);
  if(e.key==='-')scene.zoomAt(.84);
 });
