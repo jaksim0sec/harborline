@@ -32,3 +32,11 @@ The six hand-cut props (harbor, farm, sawmill, home, bakery, tree) had a real **
 - Release gate: `python3 -m unittest discover -s tests -p texture_fringe_test.py -v` checks source alpha, plus `npm run check` and `python3 tests/painted_assets_e2e.py`.
 - Keep the existing runtime `dematteOutline` and procedural fallback for older or broken texture inputs; the cleaned source now provides the primary fix. No extra raster work is performed per frame.
 - Grounding improvement: removing the artificially solid white bottom slab lets the real terrain/water show beneath structures. It does **not** add simulated height, physics, or new buildings.
+
+## v0.18.0 · roof and footprint geometry
+
+- All five building PNGs compared at the fixed 2:1 isometric plane and anchor (72,103). Only sawmill and farm needed correction.
+- Sawmill: local roof profile lift while wall edges remain intact, visible ground contact y=100 to 102. Farm: shift entire fence/wheat illustration by 3px, ground contact y=99 to 102.
+- Home, bakery and harbor remain unchanged because reorientation without a true 3D redraw would destroy their original details.
+- Repeatable one-shot edit: tools/reproject_building_assets.py, SHA-locked to the original v0.17 source; never run on its own outputs.
+- Preserve save schema, economy, 144x148 transparent RGBA, 72,103 anchor, procedural fallback, atlas/static cache size and mobile input.

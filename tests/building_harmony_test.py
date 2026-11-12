@@ -7,11 +7,11 @@ import numpy as np
 
 ROOT=Path(__file__).resolve().parents[1]
 EXPECTED={
-    'sawmill':('3da5666146ce8ba3be5e89b7c9a99da5853bb7f8','8a6ab0a604cb7d26'),
+    'sawmill':('536dfc0b961f6959c33270232fdd8a8640c1bd98','1de9d4e9be6fde0e'),
     'harbor':('efe456f66744ee622ce3fda5e462b2dbb1ffb78e','402422bc830374c5'),
     'bakery':('afce09dbb2029e744a156249949effd352b1c340','4f4961022d5499af'),
     'home':('779fd90f0cc830decebe0b13f6072811e7ce7da4','84fa7d0ef49fd961'),
-    'farm':('38a62992f91c2fd348d9445f5e552395cd40dabe','7ab09f9edef2bd39'),
+    'farm':('fc985ecda6ff8c83407c0b03ddb544996ac7b87f','7c61c591c1f2dc33'),
 }
 
 class BuildingHarmonyTest(unittest.TestCase):
