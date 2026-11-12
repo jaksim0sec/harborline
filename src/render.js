@@ -16,6 +16,14 @@ export const PAINTED_TEXTURES=Object.freeze({
 });
 /** Rendering-only size; the actor's world position and collision do not change. */
 export const ACTOR_SCALES=Object.freeze({neighbor:.68,neighbor2:.68,cat:.75});
+/** Visual-only footprints in screen pixels. A successful PNG replaces a procedural sprite's baked shadow. */
+export const CONTACT_SHADOW_WIDTHS=Object.freeze({home:78,bakery:82,farm:86,sawmill:90,harbor:96,tree:52});
+export function paintedGroundContact(type,loaded,x,y){
+ const width=CONTACT_SHADOW_WIDTHS[type];
+ if(!width||!loaded?.has(type))return null;
+ return {x:Math.round(x-width/2),y:Math.round(y-11),width,height:24};
+}
+
 /** Keep the actor's shoes planted on the original 2.5D tile contact plane. */
 export function spriteDestination(x,y,scale=1){
  return {x:Math.round(x-72*scale),y:Math.round(y-100*scale),width:SPR_W*scale,height:SPR_H*scale};
@@ -23,6 +31,19 @@ export function spriteDestination(x,y,scale=1){
 
 const names=['water','grass','grass2','meadow','clover','sand','road','farm','sawmill','bakery','home','garden','harbor','tree','bush','boat','neighbor','neighbor2','cat','lighthouse','dockpost','flowerpatch','rock','squareFountain',...Array.from({length:16},(_,i)=>`road-${i}`)];
 const makeCanvas=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
+/** Tiny reusable soft texture. Never created or painted during an animation frame. */
+function makeContactShadowTexture(){
+ const c=makeCanvas(112,48),g=c.getContext('2d');
+ g.save();g.translate(56,24);g.scale(1,.47);
+ const shade=g.createRadialGradient(0,0,2,0,0,51);
+ shade.addColorStop(0,'rgba(42,69,53,.43)');
+ shade.addColorStop(.42,'rgba(47,76,57,.26)');
+ shade.addColorStop(.79,'rgba(55,77,56,.09)');
+ shade.addColorStop(1,'rgba(55,77,56,0)');
+ g.fillStyle=shade;g.beginPath();g.arc(0,0,51,0,Math.PI*2);g.fill();g.restore();
+ return c;
+}
+
 const poly=(c,points,fill,stroke,line=1)=>{c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.closePath();if(fill){c.fillStyle=fill;c.fill();}if(stroke){c.strokeStyle=stroke;c.lineWidth=line;c.stroke();}};
 const ellipse=(c,x,y,rx,ry,fill)=>{c.beginPath();c.ellipse(x,y,rx,ry,0,0,Math.PI*2);c.fillStyle=fill;c.fill();};
 const diamond=(c,x,y,w,h,fill,stroke)=>poly(c,[[x,y-h],[x+w,y],[x,y+h],[x-w,y]],fill,stroke);
@@ -671,12 +692,13 @@ export function sceneryAt(game,x,y,used){
 
 export class Scene {
  constructor(canvas,game){
-  this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});this.atlas=atlas();
+  this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});this.atlas=atlas();this.contactShadow=makeContactShadowTexture();this.paintedNames=new Set();
   this.cache=null;this.cacheDirty=true;this.previews=new Map();this.animationTime=0;this.walkPaths=[];this.flashes=[];this.voyage=null;this.plazaMessageSince=null;this.squareRoute=null;this.squareTile=null;this.labelCache=new Map();this.game=game;this.pan={x:0,y:0};this.zoom=1;
   this.hover=null;this.tool='inspect';this.quality=1;this.width=1;this.height=1;this.t=0;this.fps=0;this.samples=[];
   this.CW=SIZE*TILE_W+240;this.CH=SIZE*TILE_H+270;this.OX=this.CW/2;this.OY=130;
   this.resize();
   this.artReady=loadPaintedTextures(this.atlas).then(loaded=>{
+    this.paintedNames=new Set(loaded);
     if(loaded.length){
       this.previews.clear();
       this.invalidate();
@@ -763,7 +785,12 @@ export class Scene {
   if(!used.has('7,21'))props.push({x:7,y:21,type:'dockpost'});
   const all=[...props,...this.game.buildings];all.sort((a,b)=>(a.x+a.y)-(b.x+b.y)||a.x-b.x);
   this.occluders=all.filter(o=>['tree','home','sawmill','bakery','harbor','lighthouse','squareFountain'].includes(o.type));
-  for(const item of all){const p=this.tileCenter(item.x,item.y);this.sprite(c,item.type,p.x,p.y);}
+  for(const item of all){
+    const p=this.tileCenter(item.x,item.y);
+    const footprint=paintedGroundContact(item.type,this.paintedNames,p.x,p.y);
+    if(footprint)c.drawImage(this.contactShadow,footprint.x,footprint.y,footprint.width,footprint.height);
+    this.sprite(c,item.type,p.x,p.y);
+  }
   // 항구 주변의 작은 오브젝트는 정적 아틀라스로 단 한 번만 렌더링한다.
 
   const roadSet=connections(this.game).roads;
