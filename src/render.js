@@ -58,6 +58,45 @@ export function selectVillageSquare(game){
  }
  return best;
 }
+/** Visit the connected fountain without creating any new saved game state. */
+export function routeToVillageSquare(game, square=selectVillageSquare(game)) {
+ if(!square)return null;
+ const harbor=game.buildings.find(b=>b.type==='harbor');
+ if(!harbor)return null;
+ const key=(x,y)=>`${x},${y}`, goal=key(square.x,square.y);
+ const roads=new Set(game.roads.map(r=>key(r.x,r.y)));
+ if(!roads.has(goal))return null;
+ const start=key(harbor.x,harbor.y), from=new Map([[start,null]]);
+ const queue=[{x:harbor.x,y:harbor.y}];
+ for(let i=0;i<queue.length;i++){
+   const {x,y}=queue[i],current=key(x,y);
+   if(current===goal){
+     const path=[];
+     for(let step=goal;step!==null;step=from.get(step)){
+       const [a,b]=step.split(',').map(Number);path.push({x:a,y:b});
+     }
+     return path.reverse();
+   }
+   for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+     const next=key(x+dx,y+dy);
+     if(!roads.has(next)||from.has(next))continue;
+     from.set(next,current);queue.push({x:x+dx,y:y+dy});
+   }
+ }
+ return null;
+}
+/** A short promenade with a real pause at the fountain, then the trip home. */
+export function plazaVisitSample(time,path,stepMs=1200,restMs=3600){
+ if(!path?.length)return null;
+ if(path.length===1)return {...path[0],resting:true};
+ const step=Math.max(1,Number(stepMs)||1200), rest=Math.max(0,Number(restMs)||0);
+ const walk=(path.length-1)*step,period=walk*2+rest;
+ const t=((time%period)+period)%period;
+ if(t>=walk&&t<walk+rest)return {...path.at(-1),resting:true};
+ const distance=t<walk?t/step:(period-t)/step;
+ const i=Math.min(path.length-2,Math.floor(distance)),f=distance-i;
+ return {x:path[i].x+(path[i+1].x-path[i].x)*f,y:path[i].y+(path[i+1].y-path[i].y)*f,resting:false};
+}
 /** The same orthogonal neighbours have different projected screen edges. */
 export function coastEdgeMask(game,x,y){
  if(!inBounds(x,y)||terrain(x,y,game)!=='sand')return 0;
@@ -528,7 +567,7 @@ export function sceneryAt(game,x,y,used){
 export class Scene {
  constructor(canvas,game){
   this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});this.atlas=atlas();
-  this.cache=null;this.cacheDirty=true;this.previews=new Map();this.animationTime=0;this.walkPaths=[];this.flashes=[];this.voyage=null;this.labelCache=new Map();this.game=game;this.pan={x:0,y:0};this.zoom=1;
+  this.cache=null;this.cacheDirty=true;this.previews=new Map();this.animationTime=0;this.walkPaths=[];this.flashes=[];this.voyage=null;this.plazaMessageSince=null;this.squareRoute=null;this.squareTile=null;this.labelCache=new Map();this.game=game;this.pan={x:0,y:0};this.zoom=1;
   this.hover=null;this.tool='inspect';this.quality=1;this.width=1;this.height=1;this.t=0;this.fps=0;this.samples=[];
   this.CW=SIZE*TILE_W+240;this.CH=SIZE*TILE_H+270;this.OX=this.CW/2;this.OY=130;
   this.resize();
@@ -557,6 +596,7 @@ export class Scene {
  sendDelivery(order){
    if(!order)return;
    this.voyage={since:this.animationTime,resource:order.resource,amount:order.amount};
+   this.plazaMessageSince=this.animationTime;
  }
  labelSprite(text){
    if(this.labelCache.has(text))return this.labelCache.get(text);
@@ -602,6 +642,8 @@ export class Scene {
     if(type)props.push({x,y,type});
   }
   const square=selectVillageSquare(this.game);
+  this.squareTile=square;
+  this.squareRoute=routeToVillageSquare(this.game,square);
   if(square)props.push({...square,type:'squareFountain'});
   if(!used.has('5,18'))props.push({x:5,y:18,type:'lighthouse'});
   // 방파제의 작은 말뚝은 물 위 장식으로만 놓인다.
@@ -670,9 +712,11 @@ export class Scene {
   }else if(this.voyage){this.voyage=null;}
   const visitors=[['neighbor',0,0,1700],['neighbor2',1,850,1950],['cat',0,1800,2600]];
   for(const [type,index,offset,speed] of visitors){
-    if(!this.walkPaths.length)break;
-    const path=type==='neighbor' && this.focusRoute?.length?this.focusRoute:this.walkPaths[index%this.walkPaths.length];
-    const v=walkSample(this.animationTime+offset,path,speed);
+    const working=type==='neighbor'&&this.focusRoute?.length;
+    const visiting=type==='neighbor2'&&this.squareRoute?.length>=2;
+    if(!working&&!visiting&&!this.walkPaths.length)continue;
+    const path=working?this.focusRoute:visiting?this.squareRoute:this.walkPaths[index%this.walkPaths.length];
+    const v=visiting?plazaVisitSample(this.animationTime,path):walkSample(this.animationTime+offset,path,speed);
     if(!v)continue;
     const px=(v.x-v.y)*TILE_W/2,py=(v.x+v.y)*TILE_H/2-(SIZE-1)*TILE_H/2;
     this.sprite(c,type,px,py+Math.sin((this.animationTime+offset)*.01)*.6);
@@ -682,6 +726,16 @@ export class Scene {
       const o=this.tileCenter(prop.x,prop.y);
       this.sprite(c,prop.type,o.x-this.OX,o.y-this.OY-(SIZE-1)*TILE_H/2);
     }
+  }
+  // An existing successful delivery is acknowledged by the village, not a new reward rule.
+  if(this.squareTile&&this.plazaMessageSince!==null){
+    const age=this.animationTime-this.plazaMessageSince;
+    if(age>=0&&age<4200){
+      const sq=this.squareTile,px=(sq.x-sq.y)*TILE_W/2,py=(sq.x+sq.y)*TILE_H/2-(SIZE-1)*TILE_H/2;
+      c.save();c.globalAlpha=Math.min(1,age/350,(4200-age)/650);
+      c.drawImage(this.labelSprite('배달 고마워요!'),px-52,py-128-age*.003);
+      c.restore();
+    }else if(age>=4200){this.plazaMessageSince=null;}
   }
   if(this.focusBuilding&&this.focusRoute?.length){
     const b=this.focusBuilding,px=(b.x-b.y)*TILE_W/2,py=(b.x+b.y)*TILE_H/2-(SIZE-1)*TILE_H/2;
