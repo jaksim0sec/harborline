@@ -2,6 +2,7 @@ import * as visual from "../src/render.js";
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { walkSample, BUILDING_BASE } from '../src/render.js';
+import { createGame, isLand } from '../src/model.js';
 
 test('walkSample stays on a looping walk and returns fractional positions', () => {
   const path = [{x:9,y:19},{x:9,y:18},{x:10,y:18}];
@@ -59,4 +60,30 @@ test('chibi proportions use larger head than torso and keep feet on the world gr
     assert.equal(spec.feetY, 103);
   }
   assert.ok(visual.CHARACTER_SPECS.cat.headWidth > visual.CHARACTER_SPECS.cat.bodyWidth);
+});
+
+test('coastal contour only marks sea-facing edges and survives expansion', () => {
+  assert.equal(typeof visual.coastEdgeMask, 'function');
+  const before = createGame();
+  for (let x=1;x<23;x++) for(let y=1;y<23;y++) {
+    const mask=visual.coastEdgeMask(before,x,y);
+    assert.ok(mask>=0&&mask<=15);
+    if (!isLand(x,y,before)) assert.equal(mask,0);
+  }
+  const shore = [...Array(24).keys()].flatMap(x => [...Array(24).keys()].map(y=>({x,y})))
+    .find(p=>visual.coastEdgeMask(before,p.x,p.y)>0);
+  assert.ok(shore,'shore must touch visible sea');
+  before.coastExpanded=true;
+  const after = visual.coastEdgeMask(before,shore.x,shore.y);
+  assert.ok(Number.isInteger(after));
+});
+
+test('moving citizens are hidden only by nearby foreground tall objects', () => {
+  assert.equal(typeof visual.shouldOcclude, 'function');
+  const actor={x:9,y:16};
+  assert.equal(visual.shouldOcclude(actor,{x:10,y:17,type:'tree'}),true);
+  assert.equal(visual.shouldOcclude(actor,{x:9,y:17,type:'home'}),true);
+  assert.equal(visual.shouldOcclude(actor,{x:8,y:14,type:'tree'}),false);
+  assert.equal(visual.shouldOcclude(actor,{x:12,y:20,type:'tree'}),false);
+  assert.equal(visual.shouldOcclude(actor,{x:10,y:17,type:'flowerpatch'}),false);
 });

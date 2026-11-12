@@ -43,9 +43,36 @@ export function isVillagePlaza(roadKeys,x,y){
  const m=roadMask(roadKeys,x,y);
  return (m.toString(2).match(/1/g)||[]).length>=3;
 }
+/** The same orthogonal neighbours have different projected screen edges. */
+export function coastEdgeMask(game,x,y){
+ if(!inBounds(x,y)||terrain(x,y,game)!=='sand')return 0;
+ const sea=(a,b)=>inBounds(a,b)&&terrain(a,b,game)==='water';
+ return (sea(x-1,y)?1:0)|(sea(x,y-1)?2:0)|(sea(x+1,y)?4:0)|(sea(x,y+1)?8:0);
+}
+/** Only nearby tall props in front of a moving actor may cover it. */
+export function shouldOcclude(actor,object){
+ const reach={tree:86,home:82,bakery:82,sawmill:82,harbor:82,lighthouse:100};
+ const maxHeight=reach[object.type];if(!maxHeight)return false;
+ const dy=((object.x+object.y)-(actor.x+actor.y))*TILE_H/2;
+ const dx=Math.abs(((object.x-object.y)-(actor.x-actor.y))*TILE_W/2);
+ return dy>1&&dy<maxHeight&&dx<(object.type==='tree'?43:51);
+}
+/** Decorative shoreline strokes are painted into the static map only. */
+function shoreline(c,px,py,mask){
+ const edges=[
+  [1,[0,-18],[-36,0]],[2,[0,-18],[36,0]],
+  [4,[36,0],[0,18]],[8,[0,18],[-36,0]]
+ ];
+ for(const [bit,a,b] of edges){
+  if(!(mask&bit))continue;
+  line(c,[[px+a[0],py+a[1]],[px+b[0],py+b[1]]],'rgba(255,248,223,.60)',1.9);
+  const midx=(a[0]+b[0])*.5,midy=(a[1]+b[1])*.5;
+  line(c,[[px+midx*.68,py+midy*.68],[px+midx*.84+3,py+midy*.84]],'rgba(247,230,195,.37)',1.0);
+ }
+}
 function ground(c,name){
  const isSea=name==='water',sand=name==='sand';
- const palette={grass:'#97c98c',grass2:'#a8d39a',meadow:'#a1d299',clover:'#8fc58b'};
+ const palette={grass:'#91c98c',grass2:'#9fd297',meadow:'#98ce91',clover:'#87c58a'};
  if(!isSea){
    poly(c,[[36,101],[72,119],[108,101],[108,108],[72,126],[36,108]],sand?'#c4ad8a':'#6ca17c');
  }
@@ -86,23 +113,62 @@ function shadow(c,size=26){ellipse(c,72,103,size,10,'rgba(53,79,67,.18)');}
 export const BUILDING_BASE=Object.freeze({centerX:72,centerY:92,halfWidth:30,halfHeight:16,wallFrontY:103,lip:4});
 function foundation(c){
  const {centerX:x,centerY:y,halfWidth:w,halfHeight:h,lip}=BUILDING_BASE;
- ellipse(c,x,y+h-1,w+3,9,'rgba(44,76,67,.26)');
- poly(c,[[x-w,y],[x,y+h],[x,y+h+lip],[x-w,y+lip]],'#c7b99c','#b7a888',.6);
- poly(c,[[x,y+h],[x+w,y],[x+w,y+lip],[x,y+h+lip]],'#b5b29a','#aa9d87',.6);
- diamond(c,x,y,w,h,'#e5dcc5','#c4b69b');
+ ellipse(c,x+6,y+h+2,w+11,12,'rgba(34,69,57,.23)');
+ ellipse(c,x+19,y+h+10,w+8,5,'rgba(44,85,66,.09)');
+ // Stone platform plus beveled limestone sides read as a base, not a floating carpet.
+ poly(c,[[x-w,y],[x,y+h],[x,y+h+lip],[x-w,y+lip]],'#cfc2a6','#b7a685',.8);
+ poly(c,[[x,y+h],[x+w,y],[x+w,y+lip],[x,y+h+lip]],'#a9ae9b','#90978a',.8);
+ diamond(c,x,y,w,h,'#ebdfc5','#c1b398');
+ for(const t of [.32,.67]){
+   line(c,[[x-w+w*t,y+h*t],[x-w+w*t,y+h*t+lip]],'rgba(151,127,103,.5)',.85);
+   line(c,[[x+w*t,y+h*(1-t)],[x+w*t,y+h*(1-t)+lip]],'rgba(125,127,107,.48)',.85);
+ }
+}
+function roofTiles(c,roofTop){
+ // All marks are clipped into the same two isometric roof faces.
+ const faces=[
+   {poly:[[41,58],[72,roofTop],[72,73],[41,62]],tone:'rgba(255,240,209,.25)'},
+   {poly:[[72,roofTop],[104,57],[104,62],[72,73]],tone:'rgba(83,75,66,.13)'}
+ ];
+ for(const f of faces){
+   c.save();c.beginPath();c.moveTo(...f.poly[0]);for(const pt of f.poly.slice(1))c.lineTo(...pt);c.closePath();c.clip();
+   for(let i=0;i<4;i++){
+     const x=44+i*17;
+     line(c,[[x,25],[x-1,82]],f.tone,.85);
+   }
+   for(let i=0;i<4;i++){
+     const y=41+i*9;
+     line(c,[[38,y],[108,y+5]],f.tone,1.1);
+   }
+   c.restore();
+ }
+ // Deep carved eaves and one continuous illuminated ridge.
+ line(c,[[41,61],[72,76],[104,61]],'rgba(67,76,69,.34)',5);
+ line(c,[[41,58],[72,73],[104,58]],'rgba(253,237,213,.62)',1.9);
+ line(c,[[72,roofTop],[41,58]],'rgba(248,231,209,.55)',1.3);
+ line(c,[[72,roofTop],[104,57]],'rgba(70,83,79,.28)',1.1);
 }
 function walls(c,opt={}){
- const {left='#ead3aa',right='#f9e3bb',roofLeft='#83acac',roofRight='#689b9a',roofTop=31,base=true}=opt;
+ const {left='#ead3aa',right='#f9e3bb',roofLeft='#83acac',roofRight='#689b9a',roofTop=31,base=true,chimney=false}=opt;
  if(base)foundation(c);else shadow(c,28);
+ // Shaded gable faces use the exact same world-light direction as the trees.
  poly(c,[[46,59],[72,73],[72,103],[46,88]],left,'#a6937e',.7);
  poly(c,[[72,73],[99,59],[99,87],[72,103]],right,'#a6937e',.7);
+ poly(c,[[47,87],[72,100],[98,86],[98,90],[72,105],[47,91]],'rgba(112,103,81,.16)');
+ line(c,[[47,63],[47,87],[70,100]],'rgba(132,102,74,.69)',2.8);
+ line(c,[[97,63],[97,86],[75,99]],'rgba(108,90,72,.67)',2.8);
+ line(c,[[71.7,74],[71.7,101]],'rgba(107,90,75,.34)',2.7);
+ // Painted corner braces make the walls read as crafted timber-frame construction.
+ line(c,[[49,74],[68,86]],'rgba(149,115,83,.29)',1.3);
+ line(c,[[77,86],[95,76]],'rgba(121,98,79,.24)',1.3);
+ if(chimney){
+   poly(c,[[82,roofTop+15],[88,roofTop+17],[88,roofTop+2],[82,roofTop]],'#b9816b','#986a5c',.7);
+   poly(c,[[88,roofTop+17],[92,roofTop+14],[92,roofTop-1],[88,roofTop+2]],'#936f60','#795a50',.7);
+   line(c,[[81,roofTop],[88,roofTop+2],[93,roofTop-2]],'#dcb39c',1.5);
+ }
  poly(c,[[41,58],[72,roofTop],[72,73],[41,62]],roofLeft,'#547779',.8);
  poly(c,[[72,roofTop],[104,57],[104,62],[72,73]],roofRight,'#547779',.8);
- poly(c,[[41,58],[72,roofTop],[104,57],[72,73]],null,'#766f5d',1);
- line(c,[[48,69],[48,87],[69,99]],'rgba(129,103,82,.58)',1.25);
- line(c,[[96,69],[96,85],[75,99]],'rgba(126,98,76,.54)',1.25);
- line(c,[[50,78],[68,88]],'rgba(153,119,91,.38)',.9);
- line(c,[[76,89],[94,79]],'rgba(153,119,91,.36)',.9);
+ roofTiles(c,roofTop);
 }
 function sign(c,text,x,y,fill='#f8eee0',ink='#8d675c',r=10){ellipse(c,x,y,r,r,fill);c.font='bold 10px sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillStyle=ink;c.fillText(text,x,y+1);}
 export const CHARACTER_SPECS=Object.freeze({
@@ -165,8 +231,13 @@ function paint(c,name){
    ellipse(c,97,86,5,5,'#dac5a4');ellipse(c,97,85,2,2,'#d7a25f');
  }
  if(name==='sawmill'){
-   walls(c,{left:'#b99d7e',right:'#d6b995',roofLeft:'#b59770',roofRight:'#937756',roofTop:35});
+   walls(c,{left:'#b99d7e',right:'#d6b995',roofLeft:'#b59770',roofRight:'#937756',roofTop:35,chimney:true});
    for(let i=0;i<3;i++)line(c,[[49,69+i*6],[70,80+i*6]],'#967e62',1.8);
+   // Cross-braces and a framed high loft window.
+   line(c,[[51,76],[69,94]],'#6f624f',1.6);
+   line(c,[[69,84],[51,87]],'#b8a184',1.1);
+   poly(c,[[80,65],[89,61],[89,68],[80,72]],'#96b4a7','#efe0bd',1);
+   line(c,[[84,63],[84,70]],'#f1d7a7',1.2);
    poly(c,[[80,75],[94,68],[94,81],[80,88]],'#8e674d','#705741',1);
    for(let i=0;i<3;i++){
      ellipse(c,98-i*8,101-i*3,5,4,'#d2a675');ellipse(c,98-i*8,101-i*3,2,2,'#97704c');
@@ -174,18 +245,28 @@ function paint(c,name){
    line(c,[[71,34],[71,29],[87,34]],'#d8dfc9',1.5);
  }
  if(name==='bakery'){
-   walls(c,{left:'#efc7aa',right:'#f9ddbb',roofLeft:'#cf8c76',roofRight:'#aa695b',roofTop:33});
+   walls(c,{left:'#efc7aa',right:'#f9ddbb',roofLeft:'#cf8c76',roofRight:'#aa695b',roofTop:33,chimney:true});
    poly(c,[[73,79],[98,67],[98,80],[73,93]],'#ffefdf','#ac6c61');
    for(let i=0;i<4;i++)poly(c,[[74+i*6,79-i*3],[77+i*6,78-i*3],[77+i*6,91-i*3],[74+i*6,92-i*3]],i%2?'#f9e4cb':'#eaa79d');
+   // Storefront has a legible glass entrance and a hand-painted awning.
+   poly(c,[[77,78],[96,69],[96,82],[77,91]],'rgba(137,185,172,.55)','#f5ead7',1.2);
+   line(c,[[79,87],[94,78]],'#fff4da',1.1);
    sign(c,'빵',52,73,'#fff4df','#a66a54',9);
    ellipse(c,82,90,3,5,'#ab7456');
    line(c,[[42,58],[72,33],[104,57]],'#fff0e7',1.6);
  }
  if(name==='home'){
-   walls(c,{left:'#e1cfb4',right:'#f5e9d3',roofLeft:'#d09a7f',roofRight:'#b17b69',roofTop:28});
+   walls(c,{left:'#e1cfb4',right:'#f5e9d3',roofLeft:'#d09a7f',roofRight:'#b17b69',roofTop:28,chimney:true});
    poly(c,[[79,78],[89,73],[89,89],[79,94]],'#8c7d73','#647970',.7);
    ellipse(c,86,83,1,1,'#f7e4bd');
    poly(c,[[49,69],[59,74],[59,82],[49,77]],'#c1d9d4','#e9f1e4',1.3);
+   // Shutters, warm panes and flower boxes: tiny distinct shapes at mobile scale.
+   line(c,[[49,68],[59,73]],'#fff6db',1.5);
+   line(c,[[48,79],[60,84]],'#9b7e66',1.8);
+   poly(c,[[50,80],[59,85],[59,88],[50,83]],'#c78d76','#a76e62',.7);
+   ellipse(c,53,81,2.3,1.8,'#efc0b0');ellipse(c,58,82,2,1.7,'#f0d59f');
+   poly(c,[[80,82],[88,78],[88,87],[80,91]],'#a3c9b8','#e6e7cd',1);
+   line(c,[[84,81],[84,88]],'#f8f1d4',1.5);
    ellipse(c,47,102,6,4,'#82a68d');ellipse(c,50,100,2.6,2.6,'#f0c0ab');
    ellipse(c,94,97,6,4,'#88ae91');ellipse(c,94,95,2.5,2.5,'#f2d69d');
  }
@@ -217,9 +298,16 @@ function paint(c,name){
    poly(c,[[67,100],[73,101],[73,69],[67,69]],'#ad865d','#98744e',.5);
    poly(c,[[73,101],[78,98],[78,67],[73,69]],'#8e704d','#816547',.5);
    line(c,[[72,79],[64,72]],'#947657',2.3);
+   line(c,[[68,95],[68,82]],'rgba(247,224,169,.43)',1.8);
+   ellipse(c,73,83,17,6,'rgba(43,104,72,.27)');
    ellipse(c,60,74,15,16,'#549b71');ellipse(c,81,69,18,21,'#559b70');
    ellipse(c,70,57,22,22,'#74b883');ellipse(c,56,66,14,15,'#74b884');
    ellipse(c,84,54,13,14,'#67ad7b');ellipse(c,68,47,13,14,'#91c990');
+   // Canopy tiers, with luminous leaf rims and small overlapping clusters.
+   ellipse(c,54,60,10,7,'rgba(177,218,150,.27)');
+   ellipse(c,81,46,10,7,'rgba(178,220,149,.24)');
+   ellipse(c,61,78,11,5,'rgba(39,112,76,.18)');
+   ellipse(c,88,74,12,5,'rgba(43,105,71,.20)');
    for(const [x,y,w,h] of [[59,52,7,3.2],[73,41,7,3],[87,51,5,2.5],[51,65,4,2],[75,63,4,2]]){
       ellipse(c,x,y,w,h,'rgba(222,245,189,.26)');
    }
@@ -412,7 +500,10 @@ export class Scene {
   c.imageSmoothingEnabled=true;
   for(let depth=0;depth<(SIZE-1)*2+1;depth++)for(let x=0;x<SIZE;x++){
    const y=depth-x;if(!inBounds(x,y))continue;
-   const p=this.tileCenter(x,y);this.sprite(c,groundTexture(x,y,terrain(x,y,this.game)),p.x,p.y);
+   const p=this.tileCenter(x,y);
+   this.sprite(c,groundTexture(x,y,terrain(x,y,this.game)),p.x,p.y);
+   const mask=coastEdgeMask(this.game,x,y);
+   if(mask)shoreline(c,p.x,p.y,mask);
   }
   const roadKeys=new Set(this.game.roads.map(r=>`${r.x},${r.y}`));
   for(const r of this.game.roads){const p=this.tileCenter(r.x,r.y);this.sprite(c,`road-${roadMask(roadKeys,r.x,r.y)}`,p.x,p.y);}
@@ -427,6 +518,7 @@ export class Scene {
   // 방파제의 작은 말뚝은 물 위 장식으로만 놓인다.
   if(!used.has('7,21'))props.push({x:7,y:21,type:'dockpost'});
   const all=[...props,...this.game.buildings];all.sort((a,b)=>(a.x+a.y)-(b.x+b.y)||a.x-b.x);
+  this.occluders=all.filter(o=>['tree','home','sawmill','bakery','harbor','lighthouse'].includes(o.type));
   for(const item of all){const p=this.tileCenter(item.x,item.y);this.sprite(c,item.type,p.x,p.y);}
   // 항구 주변의 작은 오브젝트는 정적 아틀라스로 단 한 번만 렌더링한다.
 
@@ -495,6 +587,12 @@ export class Scene {
     if(!v)continue;
     const px=(v.x-v.y)*TILE_W/2,py=(v.x+v.y)*TILE_H/2-(SIZE-1)*TILE_H/2;
     this.sprite(c,type,px,py+Math.sin((this.animationTime+offset)*.01)*.6);
+    // Restore only nearby foreground silhouettes, keeping the island itself cached.
+    for(const prop of this.occluders||[]){
+      if(!shouldOcclude(v,prop))continue;
+      const o=this.tileCenter(prop.x,prop.y);
+      this.sprite(c,prop.type,o.x-this.OX,o.y-this.OY-(SIZE-1)*TILE_H/2);
+    }
   }
   if(this.focusBuilding&&this.focusRoute?.length){
     const b=this.focusBuilding,px=(b.x-b.y)*TILE_W/2,py=(b.x+b.y)*TILE_H/2-(SIZE-1)*TILE_H/2;
