@@ -50,7 +50,7 @@ export function createGame() {
     version: 1, day: 1, elapsed: 0, paused: false, speed: 1,
     resources: { coin: 380, wood: 12, grain: 8, bread: 1, stars: 0 },
     buildings: structuredClone(initialBuildings), roads: initialRoads.map(([x, y]) => ({ x, y })),
-    orders: [order(0), order(1), order(2)], nextOrder: 3, completed: 0, celebrated: false
+    orders: [order(0), order(1), order(2)], nextOrder: 3, completed: 0, celebrated: false, focusOrderId: null
   };
 }
 export function occupied(game, x, y) { return game.buildings.some(b => b.x === x && b.y === y) || game.roads.some(r => r.x === x && r.y === y); }
@@ -74,6 +74,23 @@ export function connections(game) {
   });
   return { roads: reachable, buildings };
 }
+/** The player chooses exactly one existing letter to help with. No cost to change plans. */
+export function setFocusOrder(game,id){
+  if(!game.orders.some(o=>o.id===id))return {ok:false,message:'이미 지나간 편지예요'};
+  game.focusOrderId=game.focusOrderId===id?null:id;
+  return {ok:true,message:game.focusOrderId===null?'평소대로 일하기로 했어요':'주민이 이 배달을 도와줄 거예요'};
+}
+/** The first harbor-connected producer of the focused good, if available. */
+export function workplaceForOrder(game){
+  const letter=game.orders.find(o=>o.id===game.focusOrderId);
+  if(!letter)return null;
+  const type={grain:'farm',wood:'sawmill',bread:'bakery'}[letter.resource];
+  if(!type)return null;
+  const linked=connections(game).buildings;
+  const b=game.buildings.find(b=>b.type===type&&linked.has(key(b.x,b.y)));
+  return b?{x:b.x,y:b.y,type:b.type}:null;
+}
+
 /** Shortest harbor-to-workplace path using the placed road network.
  * Returns harbor and road tiles (ending beside the building), never mutates state.
  */
@@ -150,26 +167,36 @@ export function advanceDay(game) {
   const active = type => game.buildings.filter(b => b.type === type && linked.has(key(b.x, b.y)));
   const farms = active('farm'), mills = active('sawmill');
   const bakeries = active('bakery'), homes = active('home'), gardens = active('garden');
+  const workplace = workplaceForOrder(game);
+  const helped = b => Boolean(workplace && b.x === workplace.x && b.y === workplace.y);
   const activity = [];
   const record = (buildings, resource, amount) => {
-    for (const b of buildings) activity.push({x:b.x, y:b.y, type:b.type, resource, amount});
+    for (const b of buildings) {
+      const n=typeof amount==='function'?amount(b):amount;
+      const bonus=resource==='grain'?grainHelp:resource==='wood'?woodHelp:resource==='bread'?breadHelp:0;
+      activity.push({x:b.x,y:b.y,type:b.type,resource,amount:n,...(helped(b)&&bonus?{focused:true}:{})});
+    }
   };
-  game.resources.grain += farms.length * 4;
-  game.resources.wood += mills.length * 4;
-  record(farms, 'grain', 4);
-  record(mills, 'wood', 4);
+  const grainHelp=workplace?.type==='farm'?2:0;
+  const woodHelp=workplace?.type==='sawmill'?2:0;
+  game.resources.grain += farms.length * 4 + grainHelp;
+  game.resources.wood += mills.length * 4 + woodHelp;
+  record(farms, 'grain', b => 4+(helped(b)?grainHelp:0));
+  record(mills, 'wood', b => 4+(helped(b)?woodHelp:0));
   const batches = Math.min(bakeries.length, Math.floor(game.resources.grain / 3));
   game.resources.grain -= batches * 3;
   game.resources.bread += batches * 2;
-  record(bakeries.slice(0, batches), 'bread', 2);
+  const breadHelp=(workplace?.type==='bakery' && batches>0 && game.resources.grain>=3)?2:0;
+  if(breadHelp){game.resources.grain-=3;game.resources.bread+=breadHelp;}
+  record(bakeries.slice(0, batches), 'bread', b => 2+(helped(b)?breadHelp:0));
   game.resources.coin += homes.length * 5;
   game.resources.stars += gardens.length;
   record(homes, 'coin', 5);
   record(gardens, 'stars', 1);
   return {
-    grain: farms.length * 4 - batches * 3,
-    wood: mills.length * 4,
-    bread: batches * 2,
+    grain: farms.length * 4 + grainHelp - batches * 3 - (breadHelp?3:0),
+    wood: mills.length * 4 + woodHelp,
+    bread: batches * 2 + breadHelp,
     coin: homes.length * 5,
     activity
   };
@@ -183,6 +210,7 @@ export function deliver(game, id) {
   game.resources.coin += o.coin;
   game.resources.stars += o.stars;
   game.completed++;
+  if(game.focusOrderId===id)game.focusOrderId=null;
   game.orders.splice(index, 1, order(game.nextOrder++));
   let festival = false;
   if (game.completed >= 6 && !game.celebrated) {
@@ -206,5 +234,6 @@ export function hydrate(value) {
   game.roads = value.roads.filter(r=>inBounds(r.x,r.y) && isLand(r.x,r.y) && !buildingKeys.has(key(r.x,r.y))).slice(0,SIZE*SIZE).map(r=>({x:r.x,y:r.y}));
   game.orders = value.orders.filter(o=>Number.isInteger(o.id) && ['grain','wood','bread'].includes(o.resource) && Number.isFinite(o.amount) && o.amount>0 && Number.isFinite(o.coin)).slice(0,3).map(o=>({...o,amount:Math.floor(o.amount),coin:Math.floor(o.coin),stars:Math.max(0,Math.floor(o.stars||0))}));
   while (game.orders.length < 3) game.orders.push(order(game.nextOrder++));
+  game.focusOrderId=game.orders.some(o=>o.id===value.focusOrderId)?value.focusOrderId:null;
   return game;
 }

@@ -51,7 +51,7 @@
           <div><div class="section-overline">이웃의 부탁</div><h2>바다 건너 온 편지</h2></div>
           <button id="closeOrders" class="close-orders" type="button" aria-label="배달 목록 닫기">×</button>
         </div>
-        <p class="orders-description">이웃에게 필요한 물건을 보내주세요</p>
+        <p class="orders-description">한 편지를 골라 매일 물건 2개를 더 만들어요</p>
         <div class="order-list" id="orderList"></div>
         <div class="festival">
           <div class="festival-title"><strong>🎐 첫 바다 축제</strong><span id="festivalLabel">0 / 6</span></div>
@@ -67,7 +67,7 @@
       </div>
       <div class="inspect-card" id="inspectCard" hidden></div>
       <div class="tool-hint" id="toolHint">🖱 지도를 드래그해서 둘러보세요</div>
-      <button id="mobileOrders" class="mobile-orders" type="button" aria-controls="ordersPanel" aria-expanded="false">✉ 배달 <span id="readyCount">3</span></button>
+      <button id="mobileOrders" class="mobile-orders" type="button" aria-controls="ordersPanel" aria-expanded="false">✉ 배달 <span id="readyCount">3</span><span id="focusIndicator" class="focus-indicator" aria-hidden="true"></span></button>
 
       <nav class="buildbar" aria-label="마을 건설 도구">
         <div class="buildbar-head"><span>우리 마을 가꾸기</span><span class="buildbar-sub">도구를 고르고 빈 땅을 눌러요</span></div>
@@ -83,7 +83,7 @@
     <p>조금씩 만들어 가는 나만의 바닷마을. 바쁜 일 없이, 하고 싶은 만큼 즐겨요.</p>
     <div class="help-steps">
       <div><span>01</span><div><strong>만들기</strong><p>아래 건설 도구를 골라 빈 땅을 누르세요. 길을 통해 항구와 이어야 건물이 일해요.</p></div></div>
-      <div><span>02</span><div><strong>기다리기</strong><p>15초마다 하루가 지나고 농장·공방·빵집이 물건을 만들어요. ×2로 빠르게 진행할 수 있어요.</p></div></div>
+      <div><span>02</span><div><strong>생산 도와주기</strong><p>15초마다 하루가 지나며 물건이 만들어져요. 편지에서 도움 요청을 누르면 주민이 해당 물건을 매일 2개 더 만들어요. 빵은 햇밀 3개가 더 필요해요. 선택하지 않아도 괜찮아요.</p></div></div>
       <div><span>03</span><div><strong>나누기</strong><p>편지에 적힌 물건을 배달하면 코인과 마을 온기를 얻어요. 6번 배달하면 첫 축제!</p></div></div>
     </div>
     <p class="tiny-help">조작: 드래그 이동 · 스크롤 또는 +/- 확대 · 1~7 도구 선택 · Esc 선택 해제 · Space 일시정지<br>진행 상황은 이 브라우저에 자동 저장됩니다.</p>

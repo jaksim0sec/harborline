@@ -140,3 +140,73 @@ test('a bakery without grain and a disconnected farm have no production receipt'
  assert.equal(report.bread,0);
  assert.equal(g.resources.bread,1);
 });
+
+test('a visible letter can be focused, unfocused, and only one letter is active',()=>{
+ const g=createGame(); const before=JSON.stringify(g);
+ assert.equal(typeof gameRules.setFocusOrder,'function','focus selection API missing');
+ assert.deepEqual(gameRules.setFocusOrder(g,999).ok,false);
+ assert.equal(JSON.stringify(g),before,'invalid ID must not mutate state');
+ assert.equal(gameRules.setFocusOrder(g,0).ok,true);
+ assert.equal(g.focusOrderId,0);
+ assert.equal(gameRules.setFocusOrder(g,1).ok,true);
+ assert.equal(g.focusOrderId,1,'new focus replaces old focus');
+ assert.equal(gameRules.setFocusOrder(g,1).ok,true);
+ assert.equal(g.focusOrderId,null,'selecting same order again clears focus');
+});
+
+test('focused grain and wood letters each give +2 only from the connected first workplace',()=>{
+ const g=createGame();
+ gameRules.setFocusOrder(g,0);
+ const before={...g.resources};
+ const activity=advanceDay(g).activity;
+ assert.equal(g.resources.grain,before.grain+4+2-3);
+ assert.equal(activity.filter(a=>a.resource==='grain').reduce((s,a)=>s+a.amount,0),6);
+ assert.ok(activity.some(a=>a.resource==='grain'&&a.focused&&a.amount===6));
+ gameRules.setFocusOrder(g,1);
+ const old=g.resources.wood;
+ const second=advanceDay(g);
+ assert.equal(g.resources.wood,old+6);
+ assert.ok(second.activity.some(a=>a.resource==='wood'&&a.focused&&a.amount===6));
+});
+
+test('bread focus consumes actual extra grain, and has no effect without spare grain',()=>{
+ const g=createGame(); g.resources.grain=20;
+ gameRules.setFocusOrder(g,2);
+ const report=advanceDay(g);
+ assert.equal(g.resources.grain,18,'4 produced, 3 base + 3 focused grain consumed');
+ assert.equal(g.resources.bread,5,'1 initial, 2 base + 2 focused');
+ assert.equal(report.bread,4);
+ assert.ok(report.activity.some(a=>a.resource==='bread'&&a.focused&&a.amount===4));
+ const poor=createGame(); poor.resources.grain=0;
+ gameRules.setFocusOrder(poor,2);
+ const poorReport=advanceDay(poor);
+ assert.equal(poor.resources.bread,3);
+ assert.equal(poor.resources.grain,1);
+ assert.equal(poorReport.bread,2);
+ assert.equal(poorReport.activity.some(a=>a.focused),false);
+});
+
+test('no focused bonus or fake workplace if a productive building is disconnected',()=>{
+ const g=createGame(); gameRules.setFocusOrder(g,1);
+ assert.deepEqual(gameRules.workplaceForOrder(g),{x:10,y:17,type:'sawmill'});
+ remove(g,9,20);
+ assert.equal(gameRules.workplaceForOrder(g),null);
+ const before=g.resources.wood, report=advanceDay(g);
+ assert.equal(g.resources.wood,before);
+ assert.equal(report.activity.length,0);
+});
+
+test('delivery clears focus only for its focused letter; hydration accepts optional valid focus',()=>{
+ const g=createGame();gameRules.setFocusOrder(g,0);
+ const previous=JSON.parse(JSON.stringify(g));
+ assert.equal(hydrate(previous).focusOrderId,0);
+ const legacy={...previous};delete legacy.focusOrderId;
+ assert.equal(hydrate(legacy).focusOrderId,null);
+ assert.equal(hydrate({...previous,focusOrderId:20000}).focusOrderId,null);
+ const other=g.orders[1];g.resources[other.resource]=1000;
+ assert.equal(deliver(g,other.id).ok,true);
+ assert.equal(g.focusOrderId,0,'delivery of another letter does not remove focus');
+ const target=g.orders.find(o=>o.id===0);g.resources[target.resource]=1000;
+ assert.equal(deliver(g,target.id).ok,true);
+ assert.equal(g.focusOrderId,null);
+});

@@ -35,6 +35,30 @@ async def check():
   await page.locator('#mobileOrders').click()
   assert await page.locator('#ordersPanel').is_visible()
   assert await page.locator('#mobileOrders').get_attribute('aria-expanded')=='true'
+  # One optional letter focus should improve productivity and assign a visible neighbor.
+  assert await page.locator('[data-focus]').count()==3,'each letter needs one clear help choice'
+  await page.locator('[data-focus="0"]').click()
+  assert await page.locator('[data-focus="0"]').get_attribute('aria-pressed')=='true'
+  assert await page.evaluate('game.focusOrderId')==0
+  assert '🌾' in await page.locator('#focusIndicator').inner_text()
+  await page.evaluate('''() => {
+    window.__focusSnapshot=JSON.stringify(game);
+    remove(game,9,20);changed();
+  }''')
+  assert '길 먼저 연결' in await page.locator('[data-focus="0"]').inner_text()
+  await page.evaluate('''() => {game=hydrate(JSON.parse(window.__focusSnapshot));scene.game=game;changed();}''')
+  focus=await page.evaluate('''() => {
+    scene.buildCache();const p=scene.focusRoute;
+    const before=game.resources.grain;
+    const report=advanceDay(game);
+    return {route:p?.length,first:p?.[0],gain:game.resources.grain-before,boost:report.activity.find(a=>a.focused)?.amount};
+  }''')
+  assert focus['route']>=2 and focus['first']=={'x':9,'y':21},focus
+  assert focus['gain']==3 and focus['boost']==6,focus
+  await page.screenshot(path='/mnt/data/harborline-v05-desktop.png')
+  await page.locator('[data-focus="0"]').click()
+  assert await page.evaluate('game.focusOrderId') is None
+  assert await page.locator('[data-focus="0"]').get_attribute('aria-pressed')=='false'
   await page.locator('#closeOrders').click()
   assert not await page.locator('#ordersPanel').is_visible()
   tile=await page.evaluate('''() => ({screen:scene.worldToScreen(12,17), tile:scene.screenToTile(scene.worldToScreen(12,17).x,scene.worldToScreen(12,17).y), coin:game.resources.coin })''')
@@ -49,7 +73,7 @@ async def check():
   assert await page.locator('#toolHint').get_attribute('data-placement')=='unlinked','isolated placement should warn before building'
   await page.mouse.move(box['x']+target['x'],box['y']+target['y'])
   await page.mouse.click(box['x']+target['x'],box['y']+target['y'])
-  assert await page.locator('#coin').inner_text()=='315',await page.locator('#coin').inner_text()
+  assert await page.locator('#coin').inner_text()==str(tile['coin']-65),await page.locator('#coin').inner_text()
   assert (await page.locator('#toast').inner_text()).startswith('햇살 밭 완성')
   count=await page.evaluate('game.buildings.length')
   assert count==6,count
@@ -115,7 +139,23 @@ async def check():
   await page.locator('#mobileOrders').click()
   assert await page.locator('#ordersPanel').is_visible()
   print('mobile layout: OK, panel visible')
+  before_scroll=await page.evaluate('''() => {let e=document.querySelector('#orderList');e.scrollTop=45;return e.scrollTop;}''')
+  assert before_scroll>0,'mobile orders should remain scrollable'
+  await page.locator('[data-focus="1"]').click()
+  after_scroll=await page.evaluate('document.querySelector("#orderList").scrollTop')
+  assert abs(after_scroll-before_scroll)<=1,(before_scroll,after_scroll)
+  assert await page.evaluate('game.focusOrderId')==1
+  assert '🪵' in await page.locator('#focusIndicator').inner_text()
+  hint=await page.locator('#toast').bounding_box()
+  resourcesBox=await page.locator('.resource-row').bounding_box()
+  assert hint['y']>=resourcesBox['y']+resourcesBox['height']+6,(hint,resourcesBox)
+  for i in range(3):
+   card=await page.locator('.order').nth(i).bounding_box()
+   actions=await page.locator('.order-actions').nth(i).bounding_box()
+   assert actions['x']+actions['width']<=card['x']+card['width']-3,(card,actions)
+  await page.screenshot(path='/mnt/data/harborline-v05-mobile-panel.png')
   await page.locator('#closeOrders').click()
+  await page.screenshot(path='/mnt/data/harborline-v05-mobile-map.png')
   await page.set_viewport_size({'width':360,'height':740})
   await page.wait_for_timeout(150)
   assert (await page.locator('.buildbar').bounding_box())['x']>=0

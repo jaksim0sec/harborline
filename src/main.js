@@ -1,4 +1,4 @@
-import { createGame, hydrate, DAY_MS, SAVE_KEY, ITEMS, connections, place, remove, advanceDay, deliver, population, occupied, evaluatePlacement } from './model.js';
+import { createGame, hydrate, DAY_MS, SAVE_KEY, ITEMS, connections, place, remove, advanceDay, deliver, population, occupied, evaluatePlacement, setFocusOrder, workplaceForOrder } from './model.js';
 import { Scene } from './render.js';
 
 const $=s=>document.querySelector(s), canvas=$('#world');
@@ -33,9 +33,13 @@ function renderHUD(){
  $('#speedBtn').textContent=`×${game.speed}`;
  const ready=game.orders.filter(o=>game.resources[o.resource]>=o.amount).length;
  $('#readyCount').textContent=ready;
+ const focused=game.orders.find(o=>o.id===game.focusOrderId);
+ const helpAvailable=Boolean(focused&&workplaceForOrder(game));
+ $('#focusIndicator').textContent=focused?` · ${resources[focused.resource].icon}`:'';
+ $('#mobileOrders').setAttribute('aria-label',focused?`배달 목록 · ${resources[focused.resource].name} 집중 중`:'배달 목록');
  $('#orderList').innerHTML=game.orders.map(o=>{
   const r=resources[o.resource],have=game.resources[o.resource],enough=have>=o.amount;
-  return `<article class="order"><div class="order-top"><div><div class="order-name">${esc(o.title)}</div><div class="order-description">${esc(o.detail)}</div></div><span class="order-tag">온기 +${o.stars}</span></div><div class="order-bottom"><div class="order-need">${r.icon} ${r.name} <strong class="${enough?'enough':''}">${fmt(have)} / ${fmt(o.amount)}</strong></div><button class="order-send" type="button" data-order="${o.id}" ${enough?'':'disabled'}>${enough?'배달하기':'모으는 중'}</button></div></article>`;
+  return `<article class="order ${game.focusOrderId===o.id?'order-focused':''}"><div class="order-top"><div><div class="order-name">${esc(o.title)}</div><div class="order-description">${esc(o.detail)}</div></div><span class="order-tag">온기 +${o.stars}</span></div><div class="order-bottom"><div class="order-need">${r.icon} ${r.name} <strong class="${enough?'enough':''}">${fmt(have)} / ${fmt(o.amount)}</strong></div><div class="order-actions"><button class="order-focus" type="button" data-focus="${o.id}" aria-pressed="${game.focusOrderId===o.id}" aria-label="${esc(o.title)} 집중 작업 ${game.focusOrderId===o.id?'해제':'선택'}">${game.focusOrderId===o.id?(helpAvailable?'✓ 돕는 중':'길 먼저 연결'):'도움 요청'}</button><button class="order-send" type="button" data-order="${o.id}" ${enough?'':'disabled'}>${enough?'배달하기':'모으는 중'}</button></div></div></article>`;
  }).join('');
  const count=Math.min(6,game.completed);
  $('#festivalLabel').textContent=game.celebrated?'축제 개최!':`${count} / 6`;
@@ -88,7 +92,10 @@ canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);canvas.
 canvas.addEventListener('pointerleave',()=>{if(!pointers.size){scene.hover=null;showPlacementHint();}});
 canvas.addEventListener('wheel',e=>{e.preventDefault();const p=canvasCoords(e);scene.zoomAt(Math.exp(-e.deltaY*.001),p.x,p.y);if(inspectAt)showInspect(inspectAt.x,inspectAt.y);},{passive:false});
 $('#buildTools').addEventListener('click',e=>{const button=e.target.closest('[data-tool]');if(button)setTool(button.dataset.tool);});
-$('#orderList').addEventListener('click',e=>{const b=e.target.closest('[data-order]');if(!b)return;const id=Number(b.dataset.order),order=game.orders.find(o=>o.id===id);const result=deliver(game,id);toast(result.message);if(result.ok){scene.sendDelivery(order);changed();if(result.festival)$('#helpBtn').classList.add('celebrated');}});
+$('#orderList').addEventListener('click',e=>{
+ const focus=e.target.closest('[data-focus]');
+ if(focus){const result=setFocusOrder(game,Number(focus.dataset.focus));if(result.ok){changed();}toast(result.ok&&game.focusOrderId!==null&&!workplaceForOrder(game)?'산책길로 생산시설을 항구에 연결해 주세요':result.message);return;}
+ const b=e.target.closest('[data-order]');if(!b)return;const id=Number(b.dataset.order),order=game.orders.find(o=>o.id===id);const result=deliver(game,id);toast(result.message);if(result.ok){scene.sendDelivery(order);changed();if(result.festival)$('#helpBtn').classList.add('celebrated');}});
 $('#zoomIn').addEventListener('click',()=>scene.zoomAt(1.18));
 $('#zoomOut').addEventListener('click',()=>scene.zoomAt(.84));
 $('#centerMap').addEventListener('click',()=>{scene.resetView();});

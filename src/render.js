@@ -1,4 +1,4 @@
-import { SIZE, inBounds, isLand, terrain, connections, evaluatePlacement, routeToBuilding } from './model.js';
+import { SIZE, inBounds, isLand, terrain, connections, evaluatePlacement, routeToBuilding, workplaceForOrder } from './model.js';
 
 const TILE_W=72, TILE_H=36, SPR_W=144, SPR_H=148;
 const names=['water','grass','grass2','sand','road','farm','sawmill','bakery','home','garden','harbor','tree','bush','boat','neighbor','neighbor2','cat','lighthouse','dockpost','flowerpatch','rock'];
@@ -275,6 +275,8 @@ export class Scene {
     .map(b=>routeToBuilding(this.game,b.x,b.y))
     .filter(path=>path&&path.length>=2);
   this.connectedRoads=roadSet;
+  this.focusBuilding=workplaceForOrder(this.game);
+  this.focusRoute=this.focusBuilding?routeToBuilding(this.game,this.focusBuilding.x,this.focusBuilding.y):null;
   this.cache=cache;this.cacheDirty=false;
  }
  getCenter(){return {x:this.width*(this.width>=900?.46:.50)+this.pan.x,y:this.height*.55+this.pan.y};}
@@ -323,11 +325,15 @@ export class Scene {
   const visitors=[['neighbor',0,0,1700],['neighbor2',1,850,1950],['cat',0,1800,2600]];
   for(const [type,index,offset,speed] of visitors){
     if(!this.walkPaths.length)break;
-    const path=this.walkPaths[index%this.walkPaths.length];
+    const path=type==='neighbor' && this.focusRoute?.length?this.focusRoute:this.walkPaths[index%this.walkPaths.length];
     const v=walkSample(this.animationTime+offset,path,speed);
     if(!v)continue;
     const px=(v.x-v.y)*TILE_W/2,py=(v.x+v.y)*TILE_H/2-(SIZE-1)*TILE_H/2;
     this.sprite(c,type,px,py+Math.sin((this.animationTime+offset)*.01)*.6);
+  }
+  if(this.focusBuilding&&this.focusRoute?.length){
+    const b=this.focusBuilding,px=(b.x-b.y)*TILE_W/2,py=(b.x+b.y)*TILE_H/2-(SIZE-1)*TILE_H/2;
+    c.drawImage(this.labelSprite('✦ 주민 도움 중'),px-52,py-103);
   }
   const ageLimit=3000;
   this.flashes=this.flashes.filter(f=>this.animationTime-f.born<ageLimit);

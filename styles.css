@@ -63,7 +63,11 @@ body{margin:0;overflow:hidden}
 .order-need{display:flex;gap:5px;align-items:center;font-size:11px;color:#8c8c7d;font-variant-numeric:tabular-nums}
 .order-need strong{font-size:14px;color:#637971}
 .order-need .enough{color:#53846b}
-.order-send{padding:7px 10px;border-radius:10px;background:#4d807a;color:#fff;border:0;font-size:11px;font-weight:800;transition:background .15s}
+.order-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.order-focus{background:#f5f0e3;color:#87775e;border:1px solid #e8ddc7;border-radius:9px;font-size:10px;font-weight:800;padding:8px 6px;min-height:34px;white-space:nowrap}
+.order-focused{background:#f3f7ed;border-color:#b1cbb9}
+.order-focus[aria-pressed="true"]{background:#dcebdc;color:#4c816a;border-color:#a6c9ae}
+.order-send{padding:7px 10px;border-radius:10px;background:#4d807a;color:#fff;border:0;font-size:11px;font-weight:800;min-height:34px;transition:background .15s}
 .order-send:hover{background:#426c65}
 .order-send:disabled{color:#b2aca0;background:#f0ede5}
 .festival{background:#f4ebdf;border-radius:15px;margin-top:10px;padding:11px}
@@ -81,6 +85,7 @@ body{margin:0;overflow:hidden}
 .tool-hint{position:absolute;left:78px;bottom:117px;z-index:2;color:#477373;background:#f4faf0d9;border-radius:99px;padding:8px 12px;font-size:11px;font-weight:700;pointer-events:none}
 .mobile-orders{position:absolute;z-index:4;display:block;right:18px;top:78px;border:1px solid #f9f6eb;background:#fcf9eff0;color:#547b72;border-radius:13px;padding:10px 13px;font-size:12px;font-weight:850;box-shadow:0 7px 18px #375e5933}
 .mobile-orders span{color:#bf9278}
+.mobile-orders .focus-indicator{color:#538c73}
 .orders-panel.open ~ .mobile-orders{display:none}
 .buildbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:2;width:max-content;max-width:min(calc(100% - 200px),850px);padding:7px 9px 8px;background:#fbf8f1f5;border:1px solid #fffdfa;border-radius:17px;box-shadow:0 12px 40px #38596336;backdrop-filter:blur(16px)}
 .buildbar-head{display:none}
@@ -178,7 +183,8 @@ body{margin:0;overflow:hidden}
 .tool-name{font-size:10px}
 .tool-cost{font-size:9px}
 .watermark{bottom:103px;right:12px;left:auto;font-size:9px}
-.toast{top:58px;font-size:12px;padding:10px 12px}
+.toast{top:180px;left:11px;max-width:225px;transform:translate(0,-15px);font-size:12px;padding:10px 12px}
+.toast.show{transform:translate(0,0)}
 .tool-hint.building{display:block;left:50%;bottom:120px;transform:translateX(-50%);max-width:calc(100% - 96px);text-align:center;line-height:1.35;white-space:normal;box-shadow:0 3px 16px #355e6130}
 .note-card{display:none}
 .inspect-card{max-width:204px}
