@@ -566,6 +566,56 @@ function atlas(){
    const col=i%4,row=Math.floor(i/4);ctx.save();ctx.translate(col*SPR_W,row*SPR_H);paint(ctx,name);ctx.restore();cells.set(name,{sx:col*SPR_W,sy:row*SPR_H});
  }); return {canvas:c,cells};
 }
+/** Fix white matte baked into translucent sprite contours. Pure, one-time pixel operation. */
+export function dematteOutline(input,width,height){
+ const src=new Uint8ClampedArray(input),out=new Uint8ClampedArray(input);
+ const clamp=(v)=>Math.max(0,Math.min(1,v));
+ const iOf=(x,y)=>(y*width+x)*4;
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+  const i=iOf(x,y),a=src[i+3];if(!a)continue;
+  const r=src[i],g=src[i+1],b=src[i+2];
+  const light=Math.min(r,g,b),chroma=Math.max(r,g,b)-light;
+  const pale=clamp((light-175)/65),neutral=clamp((75-chroma)/65);
+  if(pale*neutral<.07)continue;
+  // Only remove a matte near transparent boundaries, not an interior white window.
+  let edgeDistance=4;
+  for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
+   const xx=x+dx,yy=y+dy;
+   if(xx<0||xx>=width||yy<0||yy>=height)continue;
+   if(src[iOf(xx,yy)+3]===0)edgeDistance=Math.min(edgeDistance,Math.hypot(dx,dy));
+  }
+  if(edgeDistance>=4)continue;
+  // Preserve bright details surrounded by solid foreground (windows and flowers).
+  if(a>=235){
+    let solid=0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      if(!dx&&!dy)continue;
+      const xx=x+dx, yy=y+dy;
+      if(xx>=0&&xx<width&&yy>=0&&yy<height&&src[iOf(xx,yy)+3]>230)solid++;
+    }
+    if(solid>=7)continue;
+  }
+  const risk=clamp((4-edgeDistance)/3)*pale*neutral;
+  if(risk<.05)continue;
+  let bestDist=Infinity,best=-1;
+  // Bleed a nearby non-white opaque foreground color into the feathered edge.
+  for(let dy=-8;dy<=8;dy++)for(let dx=-8;dx<=8;dx++){
+   const xx=x+dx,yy=y+dy;
+   if(xx<0||xx>=width||yy<0||yy>=height)continue;
+   const j=iOf(xx,yy);if(src[j+3]<170)continue;
+   const min=Math.min(src[j],src[j+1],src[j+2]);
+   const range=Math.max(src[j],src[j+1],src[j+2])-min;
+   if(min>=190||range<=25)continue;
+   const d=dx*dx+dy*dy;
+   if(d<bestDist){bestDist=d;best=j;}
+  }
+  if(best<0)continue;
+  const f=risk*.94;
+  for(let k=0;k<3;k++)out[i+k]=Math.round(src[i+k]*(1-f)+src[best+k]*f);
+  out[i+3]=Math.round(a*(1-clamp(risk*1.35)*.98));
+ }
+ return out;
+}
 const TERRAIN_OVERLAYS=new Set(['grass','grass2','meadow','clover']);
 /** Load images once. Preserve procedural atlas cells as a fallback if an asset fails. */
 export function loadPaintedTextures(atlas){
@@ -583,7 +633,20 @@ export function loadPaintedTextures(atlas){
  for(const {name,image} of successful){
    const cell=atlas.cells.get(name);if(!cell)continue;
    if(!TERRAIN_OVERLAYS.has(name))c.clearRect(cell.sx,cell.sy,SPR_W,SPR_H);
-   c.drawImage(image,cell.sx,cell.sy,SPR_W,SPR_H);
+   if(TERRAIN_OVERLAYS.has(name)){
+     c.drawImage(image,cell.sx,cell.sy,SPR_W,SPR_H);
+   }else{
+     // A source sprite can contain light halos from white-background extraction.
+     // Clean its alpha contours before placing it in the shared atlas, never per frame.
+     const tile=makeCanvas(SPR_W,SPR_H),g=tile.getContext('2d');
+     g.drawImage(image,0,0,SPR_W,SPR_H);
+     try{
+       const pixels=g.getImageData(0,0,SPR_W,SPR_H);
+       pixels.data.set(dematteOutline(pixels.data,SPR_W,SPR_H));
+       g.putImageData(pixels,0,0);
+     }catch{ /* If pixels are unreadable, keep the normal image path. */ }
+     c.drawImage(tile,cell.sx,cell.sy);
+   }
  }
  return successful.map(v=>v.name);
  });
