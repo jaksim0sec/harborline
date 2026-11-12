@@ -1,28 +1,40 @@
 import { SIZE, inBounds, isLand, terrain, occupied, connections } from './model.js';
 
 const TILE_W=72, TILE_H=36, SPR_W=144, SPR_H=148;
-const names=['water','grass','grass2','sand','road','farm','sawmill','bakery','home','garden','harbor','tree','bush','boat'];
-const colors={ink:'#475b50',shadow:'#59746a',grass:'#91b99b'};
+const names=['water','grass','grass2','sand','road','farm','sawmill','bakery','home','garden','harbor','tree','bush','boat','neighbor','neighbor2','cat','lighthouse','dockpost','flowerpatch','rock'];
 const makeCanvas=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
 const poly=(c,points,fill,stroke,line=1)=>{c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.closePath();if(fill){c.fillStyle=fill;c.fill();}if(stroke){c.strokeStyle=stroke;c.lineWidth=line;c.stroke();}};
 const ellipse=(c,x,y,rx,ry,fill)=>{c.beginPath();c.ellipse(x,y,rx,ry,0,0,Math.PI*2);c.fillStyle=fill;c.fill();};
 const diamond=(c,x,y,w,h,fill,stroke)=>poly(c,[[x,y-h],[x+w,y],[x,y+h],[x-w,y]],fill,stroke);
 const line=(c,pts,color,w=2)=>{c.strokeStyle=color;c.lineWidth=w;c.lineCap='round';c.lineJoin='round';c.beginPath();c.moveTo(...pts[0]);for(const p of pts.slice(1))c.lineTo(...p);c.stroke();};
+export function walkSample(time,path,period=1000){
+ if(!path.length)return null;
+ if(path.length===1)return {x:path[0].x,y:path[0].y};
+ const length=(path.length-1)*2;
+ const distance=(((time/period)%length)+length)%length;
+ const whole=Math.floor(distance),t=distance-whole;
+ const a=path[whole<path.length?whole:length-whole];
+ const next=whole+1;
+ const b=path[next<path.length?next:length-next];
+ return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t};
+}
 function ground(c,name){
   const isSea=name==='water', sand=name==='sand';
-  if(!isSea){poly(c,[[36,101],[72,119],[108,101],[108,108],[72,126],[36,108]],sand?'#c4a98b':'#6c9d86');}
-  diamond(c,72,99,36,18,isSea?'#8ebcc0':sand?'#e8d3ae':name==='grass2'?'#a2c5a3':'#98c19e',isSea?'#83b4bc':sand?'#d8c39f':'#87ad92');
+  if(!isSea){poly(c,[[36,101],[72,119],[108,101],[108,108],[72,126],[36,108]],sand?'#c4a98b':'#7ca58b');}
+  diamond(c,72,99,36,18,isSea?'#86bbc1':sand?'#ead6b7':name==='grass2'?'#a0c0a0':'#a9c8a3',isSea?'#82b6b9':sand?'#dfcbae':'#9ebd9c');
   if(isSea){
-    line(c,[[50,93],[56,90],[61,92]],'#d6e8de',1.7);
-    line(c,[[79,106],[85,103],[90,105]],'#d6e8de',1.5);
-    line(c,[[78,92],[82,90]],'#a9d6d4',1);
+    line(c,[[47,94],[52,91],[59,93]],'#c0e3dc',1.3);
+    line(c,[[82,106],[86,104],[92,105]],'#d7eae3',1.1);
+    ellipse(c,67,101,1.3,.7,'#b1d9d3');
   }else if(sand){
-    ellipse(c,67,95,1.5,1.2,'#d3bb96');ellipse(c,89,100,1.5,1,'#cdb48f');ellipse(c,57,106,1.1,1.1,'#eadfbe');
+    ellipse(c,67,95,1.5,1.2,'#d7b994');ellipse(c,89,100,1.5,1,'#d3bb9d');ellipse(c,57,106,1.1,1.1,'#f1e4c7');
+    ellipse(c,78,94,.9,.6,'#d7bb96');
   }else{
-    for(let i=0;i<7;i++){
-      const x=51+(i*17%44),y=92+(i*7%16);
-      line(c,[[x-1,y+2],[x,y-1],[x+1,y+1]],i%2?'#81aa87':'#b1ceaa',1.2);
+    for(let i=0;i<5;i++){
+      const x=51+(i*19%42),y=92+(i*7%16);
+      line(c,[[x-1,y+1],[x,y-2],[x+1,y]],i%2?'#90b696':'#b8d3aa',.8);
     }
+    ellipse(c,78,91,1.4,.7,'rgba(255,245,206,.40)');
   }
 }
 function shadow(c,size=26){ellipse(c,72,103,size,10,'rgba(53,79,67,.18)');}
@@ -46,7 +58,7 @@ function paint(c,name){
  }
  if(name==='farm'){
    shadow(c,27);
-   diamond(c,72,97,30,15,'#9b7659','#735f4a');
+   diamond(c,72,97,30,15,'#9c7153','#735f4a');
    for(let i=0;i<4;i++){
      const y=88+i*5;
      line(c,[[54-i*1.8,y],[72,y-8],[88+i*1.8,y]],'#79553f',2.6);
@@ -138,7 +150,7 @@ const hash=(x,y)=>Math.abs(((x+5)*73856093)^((y+8)*19349663))%100;
 export class Scene {
  constructor(canvas,game){
   this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});this.atlas=atlas();
-  this.cache=null;this.cacheDirty=true;this.game=game;this.pan={x:0,y:0};this.zoom=1;
+  this.cache=null;this.cacheDirty=true;this.previews=new Map();this.animationTime=0;this.walkPaths=[];this.game=game;this.pan={x:0,y:0};this.zoom=1;
   this.hover=null;this.tool='inspect';this.quality=1;this.width=1;this.height=1;this.t=0;this.fps=0;this.samples=[];
   this.CW=SIZE*TILE_W+240;this.CH=SIZE*TILE_H+270;this.OX=this.CW/2;this.OY=130;
   this.resize();
@@ -151,8 +163,20 @@ export class Scene {
   else this.zoom=Math.min(this.zoom,mobile?1.4:2.25);
   this._wasMobile=mobile;
  }
- resetView(){this.zoom=this.width<690?.69:this.width<1000?.79:1;this.pan.x=this.width<690?this.width*.5:Math.min(190,this.width*.18);this.pan.y=0;}
+ resetView(){
+  this.zoom=this.width<690?.94:this.width<1000?1.08:1.36;
+  this.pan.x=this.width<690?this.width*.75:Math.min(350,this.width*.26);
+  this.pan.y=this.width<690?-52:-12;
+ }
  invalidate(){this.cacheDirty=true;}
+ toolPreview(name){
+  if(this.previews.has(name))return this.previews.get(name);
+  const src=this.atlas.cells.get(name);if(!src)return null;
+  const preview=makeCanvas(92,92),c=preview.getContext('2d');
+  if(name==='road')c.drawImage(this.atlas.canvas,src.sx+35,src.sy+78,74,42,9,27,74,42);
+  else c.drawImage(this.atlas.canvas,src.sx+31,src.sy+23,82,92,5,0,82,92);
+  const uri=preview.toDataURL('image/png');this.previews.set(name,uri);return uri;
+ }
  sprite(ctx,name,x,y){const s=this.atlas.cells.get(name);if(!s)return;ctx.drawImage(this.atlas.canvas,s.sx,s.sy,SPR_W,SPR_H,Math.round(x-72),Math.round(y-100),SPR_W,SPR_H);}
  tileCenter(x,y){return {x:this.OX+(x-y)*TILE_W/2,y:this.OY+(x+y)*TILE_H/2};}
  buildCache(){
@@ -169,10 +193,24 @@ export class Scene {
     if(!isLand(x,y)||used.has(`${x},${y}`))continue;
     const h=hash(x,y);const edge=x<5||x>18||y<5||y>19;
     if(edge&&h<17)props.push({x,y,type:'tree'});
-    else if(h<10)props.push({x,y,type:'bush'});
+    else if(h<6)props.push({x,y,type:'bush'});
+    else if(h>90&&h<95)props.push({x,y,type:'flowerpatch'});
+    else if(edge&&h===38)props.push({x,y,type:'rock'});
   }
+  if(!used.has('5,18'))props.push({x:5,y:18,type:'lighthouse'});
+  // 방파제의 작은 말뚝은 물 위 장식으로만 놓인다.
+  if(!used.has('7,21'))props.push({x:7,y:21,type:'dockpost'});
   const all=[...props,...this.game.buildings];all.sort((a,b)=>(a.x+a.y)-(b.x+b.y)||a.x-b.x);
   for(const item of all){const p=this.tileCenter(item.x,item.y);this.sprite(c,item.type,p.x,p.y);}
+  // 항구 주변의 작은 오브젝트는 정적 아틀라스로 단 한 번만 렌더링한다.
+
+  const roadSet=connections(this.game).roads;
+  const path=[{x:9,y:20},{x:9,y:19},{x:9,y:18},{x:9,y:17},{x:9,y:16}];
+  const branch=[{x:9,y:18},{x:10,y:18},{x:11,y:18},{x:12,y:18}];
+  const contiguous=steps=>{
+    const valid=[];for(const p of steps){if(!roadSet.has(`${p.x},${p.y}`))break;valid.push(p);}return valid;
+  };
+  this.walkPaths=[contiguous(path),contiguous(branch)];
   this.cache=cache;this.cacheDirty=false;
  }
  getCenter(){return {x:this.width*(this.width>=900?.46:.50)+this.pan.x,y:this.height*.51+this.pan.y};}
@@ -186,18 +224,28 @@ export class Scene {
   const center=this.getCenter();this.pan.x+=(x-center.x)*(1-next/old);this.pan.y+=(y-center.y)*(1-next/old);this.zoom=next;
  }
  render(time){
+  if(this.t&&!this.game.paused)this.animationTime+=Math.min(200,Math.max(0,time-this.t));
   const c=this.ctx,d=this.quality,w=this.width,h=this.height;
   c.setTransform(d,0,0,d,0,0);
   const bg=c.createLinearGradient(0,0,0,h);bg.addColorStop(0,'#a9d3d3');bg.addColorStop(.58,'#8fc2c5');bg.addColorStop(1,'#80b4bb');c.fillStyle=bg;c.fillRect(0,0,w,h);
-  c.fillStyle='rgba(255,255,255,.14)';for(let i=0;i<12;i++){
-    const xx=((i*131+time*.004)% (w+100))-50,yy=((i*89+h*.25)%(h+50));ellipse(c,xx,yy,19+i%3*8,1.5,'rgba(252,255,245,.20)');
+  for(let i=0;i<10;i++){
+    const xx=((i*179+this.animationTime*.006)% (w+160))-80,yy=((i*91+h*.21)%(h+40));
+    ellipse(c,xx,yy,15+i%3*7,1,'rgba(255,253,236,.15)');
   }
   if(this.cacheDirty)this.buildCache();
   const center=this.getCenter();c.save();c.translate(center.x,center.y);c.scale(this.zoom,this.zoom);
   c.drawImage(this.cache,-this.OX,-this.OY-(SIZE-1)*TILE_H/2);
   const waterX=9,waterY=23;
-  const boatX=(waterX-waterY)*TILE_W/2+(Math.sin(time*.0004)*7),boatY=(waterX+waterY)*TILE_H/2-(SIZE-1)*TILE_H/2+Math.sin(time*.0016)*2;
+  const boatX=(waterX-waterY)*TILE_W/2+(Math.sin(this.animationTime*.0004)*7),boatY=(waterX+waterY)*TILE_H/2-(SIZE-1)*TILE_H/2+Math.sin(this.animationTime*.0016)*2;
   this.sprite(c,'boat',boatX,boatY);
+  const [pathA,pathB]=this.walkPaths;
+  const visitors=[['neighbor',pathA,0,1750],['neighbor2',pathB,1900,2050],['cat',pathA,4200,2800]];
+  for(const [type,path,offset,speed] of visitors){
+    const v=walkSample(this.animationTime+offset,path,speed);
+    if(!v)continue;
+    const px=(v.x-v.y)*TILE_W/2,py=(v.x+v.y)*TILE_H/2-(SIZE-1)*TILE_H/2;
+    this.sprite(c,type,px,py+Math.sin((this.animationTime+offset)*.01)*.6);
+  }
   if(this.hover&&inBounds(this.hover.x,this.hover.y)){
     const {x,y}=this.hover;const px=(x-y)*TILE_W/2,py=(x+y)*TILE_H/2-(SIZE-1)*TILE_H/2;
     const valid=isLand(x,y)&&!occupied(this.game,x,y);

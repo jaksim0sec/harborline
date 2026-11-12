@@ -12,15 +12,15 @@ const fmt=n=>new Intl.NumberFormat('ko-KR').format(n);
 const resources={grain:{name:'햇밀',icon:'🌾'},wood:{name:'목재',icon:'🪵'},bread:{name:'빵',icon:'🥐'}};
 function save(){try {localStorage.setItem(SAVE_KEY,JSON.stringify(game));}catch{}}
 function toast(message){const el=$('#toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2500);}
-function setTool(name){selected=name;scene.tool=name;scene.hover=null;inspectAt=null;$('#inspectCard').hidden=true;canvas.classList.toggle('building',name!=='inspect');renderTools();$('#toolHint').textContent=name==='inspect'?'🖱 건물을 눌러 정보를 보세요':`${ITEMS[name].name} 설치 · 빈 땅을 누르세요`;}
-function renderTools(){const tools=[['inspect',{name:'둘러보기',icon:'✋',coin:null,wood:0}],...Object.entries(ITEMS)];
- $('#buildTools').innerHTML=tools.map(([key,item],i)=>`<button class="tool ${selected===key?'selected':''}" data-tool="${key}" type="button" title="${esc(item.description||'지도를 이동하고 건물을 살펴봐요')}" aria-pressed="${selected===key}"><span class="tool-emoji">${item.icon}</span><span class="tool-name">${item.name}</span><span class="tool-cost">${item.coin===null?'이동 / 정보':`◈ ${item.coin}${item.wood?` · ▰ ${item.wood}`:''}`}</span></button>`).join('');
+function setTool(name){selected=name;scene.tool=name;scene.hover=null;inspectAt=null;$('#inspectCard').hidden=true;canvas.classList.toggle('building',name!=='inspect');renderTools();$('#toolHint').textContent=name==='inspect'?'건물을 누르면 정보를 볼 수 있어요':`${ITEMS[name].name} · 빈 땅을 눌러 지으세요`;}
+function renderTools(){const tools=[['inspect',{name:'둘러보기',icon:'⌕',coin:null,wood:0}],...Object.entries(ITEMS)];
+ $('#buildTools').innerHTML=tools.map(([key,item],i)=>`<button class="tool ${selected===key?'selected':''}" data-tool="${key}" type="button" title="${esc(item.description||'지도를 이동하고 건물을 살펴봐요')}" aria-pressed="${selected===key}"><span class="tool-art" aria-hidden="true">${key==='inspect'?'<span class="inspect-icon">⌕</span>':`<img src="${scene.toolPreview(key)}" alt="" width="48" height="48">`}</span><span class="tool-name">${item.name}</span><span class="tool-cost">${item.coin===null?'이동 · 정보':`${item.coin}코인${item.wood?` · 목재${item.wood}`:''}`}</span></button>`).join('');
 }
 function renderHUD(){
  for(const k of ['coin','wood','grain','bread'])$('#'+k).textContent=fmt(game.resources[k]);
  $('#population').textContent=`주민 ${fmt(population(game))}명`;
  $('#happiness').textContent=`마을 온기 ${fmt(game.resources.stars)}`;
- $('#dayBadge').textContent=`☀️ ${game.day}일차`;
+ $('#dayBadge').textContent=`☀ ${game.day}일차`;
  $('#pauseBtn').textContent=game.paused?'▶':'Ⅱ';$('#pauseBtn').setAttribute('aria-label',game.paused?'시간 재개':'시간 멈추기');
  $('#speedBtn').textContent=`×${game.speed}`;
  const ready=game.orders.filter(o=>game.resources[o.resource]>=o.amount).length;
@@ -33,7 +33,7 @@ function renderHUD(){
  $('#festivalLabel').textContent=game.celebrated?'축제 개최!':`${count} / 6`;
  $('#festivalFill').style.width=`${count/6*100}%`;
  $('#festivalHint').textContent=game.celebrated?'축제를 열었어요! 원하는 만큼 마을을 더 가꿔요':'배달 6번을 마치면 마을에 축제가 열려요';
- $('#guideText').innerHTML=game.completed===0?'하루가 지나면 밭과 공방이 일해요<br>이웃에게 배달하고 마을을 넓혀보세요':game.completed<6?`지금까지 배달 ${game.completed}번 성공!<br>조금씩 커지는 마을을 즐겨보세요`:'첫 축제를 열었어요!<br>이제 당신만의 마을을 더 가꿔봐요';
+ $('#guideText').innerHTML=game.completed===0?'아래에서 건물을 고르고 빈 땅을 톡!<br>산책길로 항구에 연결하면 일을 시작해요':game.completed<6?`지금까지 배달 ${game.completed}번 성공!<br>조금씩 커지는 마을을 즐겨보세요`:'첫 축제를 열었어요!<br>이제 당신만의 마을을 더 가꿔봐요';
 }
 function changed(){scene.invalidate();renderHUD();save();if(inspectAt)showInspect(inspectAt.x,inspectAt.y);}
 function showInspect(x,y){
@@ -86,7 +86,7 @@ $('#zoomOut').addEventListener('click',()=>scene.zoomAt(.84));
 $('#centerMap').addEventListener('click',()=>{scene.resetView();});
 $('#pauseBtn').addEventListener('click',()=>{game.paused=!game.paused;renderHUD();save();toast(game.paused?'마을의 시간이 잠시 멈췄어요':'다시 하루가 흘러가요');});
 $('#speedBtn').addEventListener('click',()=>{game.speed=game.speed===1?2:1;renderHUD();save();});
-$('#hideGuide').addEventListener('click',()=>{$('.note-card').hidden=true;});
+$('#hideGuide').addEventListener('click',()=>{$('.note-card').hidden=true;try{sessionStorage.setItem('harborline.guide.dismissed','1');}catch{}});
 const help=$('#helpDialog');
 $('#helpBtn').addEventListener('click',()=>help.showModal());
 $('#closeHelp').addEventListener('click',()=>help.close());
@@ -118,4 +118,5 @@ function loop(t){
  if(t-lastUI>250){$('#dayProgress').style.width=`${game.elapsed/DAY_MS*100}%`;lastUI=t;}
  if(t-lastFrame>=1000/30){scene.render(t);lastFrame=t;}
 }
+try{if(sessionStorage.getItem('harborline.guide.dismissed')==='1')$('.note-card').hidden=true;}catch{}
 renderTools();renderHUD();requestAnimationFrame(loop);
