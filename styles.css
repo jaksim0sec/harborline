@@ -39,12 +39,15 @@ body{margin:0;overflow:hidden}
 .status-dot{height:7px;width:7px;background:#6aab83;border-radius:50%;box-shadow:0 0 0 3px #ffffff6b}
 .status-separator{color:#6a9a98;margin:0 5px}
 
-.note-card{position:absolute;z-index:2;left:18px;top:164px;display:flex;gap:10px;align-items:flex-start;max-width:306px;background:#fcf7e9f5;border:1px solid #eee1c9;border-radius:19px;padding:11px 30px 10px 12px;box-shadow:0 7px 20px #466d681c;pointer-events:auto}
+.note-card{position:absolute;z-index:2;left:18px;top:164px;display:flex;align-items:center;gap:9px;width:max-content;max-width:350px;min-height:60px;padding:9px 31px 9px 9px;background:#fcf7e9ef;border:1px solid #eee1c9;border-radius:16px;box-shadow:0 7px 20px #466d681c;pointer-events:auto}
 .note-card[hidden]{display:none}
-.note-illustration{width:36px;height:36px;display:grid;place-items:center;background:#f7e7d1;color:#c78272;border-radius:12px;font-size:26px;flex-shrink:0}
-.note-eyebrow{font-size:11px;font-weight:800;color:#b98b6f}
-.note-card p{font-size:11px;line-height:1.5;color:#776d60;margin:4px 0 0;word-break:keep-all}
-.note-close{position:absolute;right:6px;top:7px;border:0;background:transparent;color:#b9ab96;font-size:20px;width:24px;height:24px;line-height:1}
+.note-illustration{display:grid;place-items:center;flex-shrink:0;width:31px;height:31px;background:#f2e7d4;color:#a67a57;border-radius:10px;font-size:19px}
+.note-copy{min-width:0;flex:1}
+.note-eyebrow{display:block;font-size:11px;font-weight:800;color:#936d54;line-height:1.4}
+.note-card p{font-size:10.5px;line-height:1.35;color:#776d60;margin:3px 0 0;word-break:keep-all}
+.note-action{border:1px solid #c6d9c3;background:#eaf1e3;color:#527766;flex-shrink:0;border-radius:10px;padding:8px 9px;font-size:10px;font-weight:800}
+.note-action:hover{background:#dcebd9}
+.note-close{position:absolute;right:3px;top:3px;border:0;background:transparent;color:#b9ab96;font-size:17px;width:21px;height:21px;line-height:1}
 
 .orders-panel{position:absolute;z-index:3;right:18px;top:128px;width:290px;max-height:min(68%,500px);display:none;flex-direction:column;background:#fbf8f0f5;border:1px solid #ffffffeb;border-radius:24px;box-shadow:0 16px 48px #3a5f6344;backdrop-filter:blur(18px);padding:17px 13px 14px}
 .orders-panel.open{display:flex}
@@ -58,6 +61,8 @@ body{margin:0;overflow:hidden}
 .order-top{display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
 .order-name{font-size:13px;font-weight:800;letter-spacing:-.045em;color:#4f5f53}
 .order-description{font-size:10.5px;color:#ada696;margin-top:3px}
+.order-forecast{font-size:10px;font-weight:750;color:#729486;margin-top:6px;line-height:1.3}
+.order-forecast.forecast-ready{color:#428975}
 .order-tag{font-size:10px;background:#f2e8d9;border-radius:999px;color:#a18469;padding:3px 6px;white-space:nowrap}
 .order-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:7px;gap:9px}
 .order-need{display:flex;gap:5px;align-items:center;font-size:11px;color:#8c8c7d;font-variant-numeric:tabular-nums}
@@ -143,7 +148,10 @@ body{margin:0;overflow:hidden}
 .buildbar{max-width:calc(100% - 110px);left:50%}
 .tool{min-width:72px}
 .tool-name{font-size:10px}
-.note-card{display:none}
+.note-card{display:flex;left:14px;top:160px;max-width:240px;padding:8px 9px;min-height:48px;gap:5px}
+.note-illustration{display:none}
+.note-action{display:none}
+.note-close{display:none}
 .resource{min-width:84px;padding:6px 8px;gap:6px}
 .resource-icon{width:26px;height:26px}
 .left-hud{left:14px;top:76px}
@@ -186,7 +194,9 @@ body{margin:0;overflow:hidden}
 .toast{top:180px;left:11px;max-width:225px;transform:translate(0,-15px);font-size:12px;padding:10px 12px}
 .toast.show{transform:translate(0,0)}
 .tool-hint.building{display:block;left:50%;bottom:120px;transform:translateX(-50%);max-width:calc(100% - 96px);text-align:center;line-height:1.35;white-space:normal;box-shadow:0 3px 16px #355e6130}
-.note-card{display:none}
+.note-card{display:flex;left:11px;top:141px;max-width:215px;padding:7px 9px;min-height:45px;background:#fffaf0ed}
+.note-eyebrow{font-size:10px}
+.note-card p{font-size:9px;max-width:195px}
 .inspect-card{max-width:204px}
 .help-dialog{padding:19px}
 }

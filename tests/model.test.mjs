@@ -210,3 +210,65 @@ test('delivery clears focus only for its focused letter; hydration accepts optio
  assert.equal(deliver(g,target.id).ok,true);
  assert.equal(g.focusOrderId,null);
 });
+
+
+test('early delivery forecast is pure and shows tangible focused time savings',()=>{
+ const g=createGame(), before=JSON.stringify(g);
+ assert.equal(typeof gameRules.forecastOrder,'function');
+ assert.equal(gameRules.forecastOrder(g,0,null),4);
+ assert.equal(gameRules.forecastOrder(g,0,0),2);
+ assert.equal(gameRules.forecastOrder(g,1,null),1);
+ assert.equal(gameRules.forecastOrder(g,1,1),1);
+ assert.equal(gameRules.forecastOrder(g,2,null),3);
+ assert.equal(gameRules.forecastOrder(g,2,2),2);
+ assert.equal(JSON.stringify(g),before,'forecast cannot change saved data');
+});
+
+test('forecast handles readiness, bad orders, disconnected production and a finite horizon',()=>{
+ const g=createGame();g.resources.grain=12;
+ assert.equal(gameRules.forecastOrder(g,0,null),0);
+ assert.equal(gameRules.forecastOrder(g,777,null),null);
+ g.resources.grain=0;remove(g,9,20);
+ assert.equal(gameRules.forecastOrder(g,0,null),null);
+ assert.equal(gameRules.forecastOrder(g,0,0),null);
+ assert.equal(gameRules.forecastOrder(g,0,null,1),null);
+});
+
+test('next step first explains help, then waiting, then a ready delivery',()=>{
+ const g=createGame();
+ assert.equal(typeof gameRules.nextStep,'function');
+ let step=gameRules.nextStep(g);
+ assert.equal(step.action,'focus');assert.equal(step.orderId,0);
+ assert.ok(step.message.includes('2일'));
+ gameRules.setFocusOrder(g,0);step=gameRules.nextStep(g);
+ assert.equal(step.action,'wait');assert.equal(step.orderId,0);
+ g.resources.grain=12;step=gameRules.nextStep(g);
+ assert.equal(step.action,'deliver');assert.equal(step.orderId,0);
+ assert.match(step.message,/코인/);
+});
+
+test('next step warns about broken producer links and congratulates a celebrated town',()=>{
+ const g=createGame();gameRules.setFocusOrder(g,0);remove(g,9,20);
+ assert.equal(gameRules.nextStep(g).action,'connect');
+ const old=JSON.stringify(g);
+ assert.deepEqual(gameRules.nextStep(g),gameRules.nextStep(g));
+ assert.equal(JSON.stringify(g),old);
+ g.celebrated=true;
+ assert.equal(gameRules.nextStep(g).action,'decorate');
+});
+
+test('large pending orders are not misdiagnosed as a disconnected production road',()=>{
+ const g=createGame();g.orders.forEach(o=>o.amount=999);
+ assert.equal(gameRules.forecastOrder(g,g.orders[0].id,null),null);
+ const suggestion=gameRules.nextStep(g);
+ assert.equal(suggestion.action,'wait','active factories need production guidance, not a road warning');
+ assert.match(suggestion.message,/생산/);
+});
+
+test('after the first delivery the prompt calls it the next delivery',()=>{
+ const g=createGame();g.resources.grain=12;
+ assert.equal(deliver(g,0).ok,true);
+ const s=gameRules.nextStep(g);
+ assert.notEqual(s.title,'첫 배달을 준비해 볼까요?');
+ assert.ok(s.title.includes('다음') || s.action==='deliver');
+});

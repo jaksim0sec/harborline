@@ -11,6 +11,17 @@ async def check():
   page=await browser.new_page(viewport={'width':1365,'height':820})
   errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   await page.set_content(html)
+  # A first-time player gets a real next action and can open the same existing letter panel.
+  assert await page.locator('[data-order="0"]').count()==1, 'guide action must not reuse delivery-button selector'
+  assert '첫 배달' in await page.locator('#guideTitle').inner_text()
+  assert '2일' in await page.locator('#guideText').inner_text()
+  assert await page.locator('#guideAction').is_visible()
+  assert await page.locator('#guideAction').inner_text()=='편지 열기'
+  await page.locator('#guideAction').click()
+  assert await page.locator('#ordersPanel').is_visible()
+  assert '4일' in await page.locator('[data-forecast="0"]').inner_text()
+  assert '2일' in await page.locator('[data-forecast="0"]').inner_text()
+  await page.locator('#closeOrders').click()
   # The map must extend behind separate small HUD islands, not begin under a full-width header.
   layout=await page.evaluate('''() => {const box=s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height}};return {stage:box('.stage'),top:box('.topbar'),identity:box('.identity'),actions:box('.header-actions'),resources:box('.left-hud'),orders:box('.mobile-orders'),bg:getComputedStyle(document.querySelector('.topbar')).backgroundColor};}''')
   assert layout['stage']['y']==0 and layout['stage']['height']>=819,layout
@@ -40,6 +51,9 @@ async def check():
   await page.locator('[data-focus="0"]').click()
   assert await page.locator('[data-focus="0"]').get_attribute('aria-pressed')=='true'
   assert await page.evaluate('game.focusOrderId')==0
+  assert '2일' in await page.locator('[data-forecast="0"]').inner_text()
+  assert '돕는 중' in await page.locator('#guideTitle').inner_text()
+  assert await page.locator('#guideAction').inner_text()=='진행 확인'
   assert '🌾' in await page.locator('#focusIndicator').inner_text()
   await page.evaluate('''() => {
     window.__focusSnapshot=JSON.stringify(game);
@@ -55,7 +69,7 @@ async def check():
   }''')
   assert focus['route']>=2 and focus['first']=={'x':9,'y':21},focus
   assert focus['gain']==3 and focus['boost']==6,focus
-  await page.screenshot(path='/mnt/data/harborline-v05-desktop.png')
+  await page.screenshot(path='/mnt/data/harborline-v06-desktop.png')
   await page.locator('[data-focus="0"]').click()
   assert await page.evaluate('game.focusOrderId') is None
   assert await page.locator('[data-focus="0"]').get_attribute('aria-pressed')=='false'
@@ -84,8 +98,10 @@ async def check():
   assert await page.evaluate('game.buildings.length')==5
   await page.evaluate('''() => {game.resources.grain=12;renderHUD()}''')
   await page.locator('#mobileOrders').click()
+  assert await page.locator('#guideAction').inner_text()=='바로 배달'
   await page.locator('[data-order="0"]').click()
   assert await page.evaluate('game.completed')==1
+  assert '첫 배달' not in await page.locator('#guideTitle').inner_text() or '첫 배달' in await page.locator('#guideText').inner_text()
   assert await page.locator('#festivalLabel').inner_text()=='1 / 6'
   await page.keyboard.press('Escape')
   assert not await page.locator('#ordersPanel').is_visible(), 'Escape should return to the map'
@@ -134,6 +150,10 @@ async def check():
   previews=await page.locator('.tool-art img').count()
   assert previews==6, 'six matching atlas tool previews expected: '+str(previews)
   assert await page.locator('#mobileOrders').is_visible()
+  assert await page.locator('.note-card').is_visible(), 'a mobile player also needs the first-goal hint'
+  assert (await page.locator('.note-card').bounding_box())['width']<260, 'mobile hint should not cover the map'
+  goal=await page.locator('.note-card').bounding_box(); letterButton=await page.locator('#mobileOrders').bounding_box()
+  assert goal['x']+goal['width']+4<letterButton['x'], (goal,letterButton)
   previewOk=await page.locator('.tool-art img').evaluate_all('(images)=>images.every(i=>i.complete&&i.naturalWidth>0)')
   assert previewOk,'tool atlas preview image failed to load'
   await page.locator('#mobileOrders').click()
@@ -153,9 +173,9 @@ async def check():
    card=await page.locator('.order').nth(i).bounding_box()
    actions=await page.locator('.order-actions').nth(i).bounding_box()
    assert actions['x']+actions['width']<=card['x']+card['width']-3,(card,actions)
-  await page.screenshot(path='/mnt/data/harborline-v05-mobile-panel.png')
+  await page.screenshot(path='/mnt/data/harborline-v06-mobile-panel.png')
   await page.locator('#closeOrders').click()
-  await page.screenshot(path='/mnt/data/harborline-v05-mobile-map.png')
+  await page.screenshot(path='/mnt/data/harborline-v06-mobile-map.png')
   await page.set_viewport_size({'width':360,'height':740})
   await page.wait_for_timeout(150)
   assert (await page.locator('.buildbar').bounding_box())['x']>=0

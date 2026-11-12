@@ -218,6 +218,54 @@ export function deliver(game, id) {
   }
   return { ok: true, festival, message: festival ? '바다 축제 시작! 마을에 300코인과 온기 5개가 도착했어요 🎊' : '배달 성공! 이웃에게 따뜻한 마음이 전해졌어요' };
 }
+/** Predict when an existing letter will be ready, using exactly the normal daily production rules.
+ * `focusId` is an optional hypothetical choice. This never mutates the player's village.
+ * null means no forecastable production within the horizon, not an exact time promise.
+ */
+export function forecastOrder(game, id, focusId=game.focusOrderId, maxDays=30) {
+  const letter=game.orders.find(o=>o.id===id);
+  if(!letter)return null;
+  if(game.resources[letter.resource]>=letter.amount)return 0;
+  const simulated=structuredClone(game);
+  simulated.focusOrderId=simulated.orders.some(o=>o.id===focusId)?focusId:null;
+  const horizon=Math.max(0,Math.min(30,Math.floor(Number(maxDays)||0)));
+  for(let day=1;day<=horizon;day++){
+    advanceDay(simulated);
+    if(simulated.resources[letter.resource]>=letter.amount)return day;
+  }
+  return null;
+}
+
+/** A compact, optional next step. Pure derivation; no new tutorial/save state. */
+export function nextStep(game) {
+  if(game.celebrated)return {action:'decorate',title:'첫 축제 달성!',message:'우리만의 바닷마을을 자유롭게 꾸며 보세요',orderId:null};
+  const ready=game.orders.find(o=>game.resources[o.resource]>=o.amount);
+  if(ready)return {action:'deliver',title:'배달 준비 완료',message:`${ready.title} · ${ready.coin}코인과 온기 +${ready.stars}`,orderId:ready.id};
+  const focused=game.orders.find(o=>o.id===game.focusOrderId);
+  if(focused){
+    if(!workplaceForOrder(game))return {action:'connect',title:'일터에 가는 길이 없어요',message:'산책길로 항구와 생산시설을 이어주세요',orderId:focused.id};
+    const days=forecastOrder(game,focused.id,focused.id);
+    return {action:'wait',title:'이웃이 배달을 돕는 중',message:days===null?'재료가 더 필요해요 · 건물과 재고를 살펴보세요':`${focused.title} · 약 ${days}일 뒤 준비`,orderId:focused.id};
+  }
+  const options=game.orders.map(o=>{
+    const usual=forecastOrder(game,o.id,null);
+    const helped=forecastOrder(game,o.id,o.id);
+    return {o,usual,helped,benefit:usual!==null&&helped!==null?usual-helped:0};
+  }).filter(r=>r.helped!==null);
+  options.sort((a,b)=>b.benefit-a.benefit||a.helped-b.helped||a.o.id-b.o.id);
+  const best=options[0];
+  if(!best){
+    const linked=connections(game).buildings;
+    const producers={grain:'farm',wood:'sawmill',bread:'bakery'};
+    const working=game.orders.some(o=>game.buildings.some(b=>b.type===producers[o.resource]&&linked.has(key(b.x,b.y))));
+    return working
+      ?{action:'wait',title:'조금 더 만들어 볼까요?',message:'생산시설을 늘리면 배달이 더 빨라져요',orderId:null}
+      :{action:'connect',title:'생산시설을 연결해 주세요',message:'산책길을 항구와 이어야 배달 재료를 만들어요',orderId:null};
+  }
+  const saving=best.benefit>0?` · 도움 요청 시 ${best.benefit}일 단축`:'';
+  return {action:'focus',title:game.completed===0?'첫 배달을 준비해 볼까요?':'다음 배달을 골라볼까요?',message:`${best.o.title} · 약 ${best.helped}일${saving}`,orderId:best.o.id};
+}
+
 export function population(game) { return 2 + game.buildings.filter(b => b.type === 'home').length * 3; }
 export function hydrate(value) {
   if (!value || value.version !== 1 || !Array.isArray(value.buildings) || !Array.isArray(value.roads) || !Array.isArray(value.orders)) return createGame();

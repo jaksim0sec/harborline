@@ -1,4 +1,4 @@
-import { createGame, hydrate, DAY_MS, SAVE_KEY, ITEMS, connections, place, remove, advanceDay, deliver, population, occupied, evaluatePlacement, setFocusOrder, workplaceForOrder } from './model.js';
+import { createGame, hydrate, DAY_MS, SAVE_KEY, ITEMS, connections, place, remove, advanceDay, deliver, population, occupied, evaluatePlacement, setFocusOrder, workplaceForOrder, forecastOrder, nextStep } from './model.js';
 import { Scene } from './render.js';
 
 const $=s=>document.querySelector(s), canvas=$('#world');
@@ -39,13 +39,20 @@ function renderHUD(){
  $('#mobileOrders').setAttribute('aria-label',focused?`배달 목록 · ${resources[focused.resource].name} 집중 중`:'배달 목록');
  $('#orderList').innerHTML=game.orders.map(o=>{
   const r=resources[o.resource],have=game.resources[o.resource],enough=have>=o.amount;
-  return `<article class="order ${game.focusOrderId===o.id?'order-focused':''}"><div class="order-top"><div><div class="order-name">${esc(o.title)}</div><div class="order-description">${esc(o.detail)}</div></div><span class="order-tag">온기 +${o.stars}</span></div><div class="order-bottom"><div class="order-need">${r.icon} ${r.name} <strong class="${enough?'enough':''}">${fmt(have)} / ${fmt(o.amount)}</strong></div><div class="order-actions"><button class="order-focus" type="button" data-focus="${o.id}" aria-pressed="${game.focusOrderId===o.id}" aria-label="${esc(o.title)} 집중 작업 ${game.focusOrderId===o.id?'해제':'선택'}">${game.focusOrderId===o.id?(helpAvailable?'✓ 돕는 중':'길 먼저 연결'):'도움 요청'}</button><button class="order-send" type="button" data-order="${o.id}" ${enough?'':'disabled'}>${enough?'배달하기':'모으는 중'}</button></div></div></article>`;
+  const focusedThis=game.focusOrderId===o.id;
+  const usual=forecastOrder(game,o.id,game.focusOrderId), helped=forecastOrder(game,o.id,o.id);
+  const saved=usual!==null&&helped!==null?usual-helped:0;
+  const forecast=enough?'지금 배달 가능':focusedThis&&usual!==null?`주민 도움 중 · 약 ${usual}일 뒤`:usual===null?'30일 안에 준비 어려움 · 생산 상태 확인':`약 ${usual}일 뒤${saved>0?` · 도움 시 ${saved}일 단축`:''}`;
+  return `<article class="order ${focusedThis?'order-focused':''}" data-letter="${o.id}"><div class="order-top"><div><div class="order-name">${esc(o.title)}</div><div class="order-description">${esc(o.detail)}</div></div><span class="order-tag">온기 +${o.stars}</span></div><div class="order-forecast ${enough?'forecast-ready':''}" data-forecast="${o.id}">${esc(forecast)}</div><div class="order-bottom"><div class="order-need">${r.icon} ${r.name} <strong class="${enough?'enough':''}">${fmt(have)} / ${fmt(o.amount)}</strong></div><div class="order-actions"><button class="order-focus" type="button" data-focus="${o.id}" aria-pressed="${focusedThis}" aria-label="${esc(o.title)} 집중 작업 ${focusedThis?'해제':'선택'}">${focusedThis?(helpAvailable?'✓ 돕는 중':'길 먼저 연결'):'도움 요청'}</button><button class="order-send" type="button" data-order="${o.id}" ${enough?'':'disabled'}>${enough?'배달하기':'모으는 중'}</button></div></div></article>`;
  }).join('');
  const count=Math.min(6,game.completed);
  $('#festivalLabel').textContent=game.celebrated?'축제 개최!':`${count} / 6`;
  $('#festivalFill').style.width=`${count/6*100}%`;
  $('#festivalHint').textContent=game.celebrated?'축제를 열었어요! 원하는 만큼 마을을 더 가꿔요':'배달 6번을 마치면 마을에 축제가 열려요';
- $('#guideText').innerHTML=game.completed===0?'아래에서 건물을 고르고 빈 땅을 톡!<br>산책길로 항구에 연결하면 일을 시작해요':game.completed<6?`지금까지 배달 ${game.completed}번 성공!<br>조금씩 커지는 마을을 즐겨보세요`:'첫 축제를 열었어요!<br>이제 당신만의 마을을 더 가꿔봐요';
+ const guide=nextStep(game);$('#guideTitle').textContent=guide.title;$('#guideText').textContent=guide.message;
+ $('#guideAction').textContent=({connect:'산책길 선택',decorate:'꾸미기 도구',deliver:'바로 배달',focus:'편지 열기',wait:'진행 확인'})[guide.action] || '편지 보기';
+ $('#guideAction').dataset.action=guide.action;
+ $('#guideAction').dataset.guideOrder=guide.orderId===null?'':String(guide.orderId);
 }
 function changed(){scene.invalidate();renderHUD();save();showPlacementHint(scene.hover);if(inspectAt)showInspect(inspectAt.x,inspectAt.y);}
 function showInspect(x,y){
@@ -113,6 +120,14 @@ $('#resetBtn').addEventListener('click',()=>{
 const panel=$('#ordersPanel');
 const toggleOrders=open=>{panel.classList.toggle('open',open);$('#mobileOrders').setAttribute('aria-expanded',String(open));};
 $('#mobileOrders').addEventListener('click',()=>toggleOrders(!panel.classList.contains('open')));
+$('#guideAction').addEventListener('click',()=>{
+ const action=$('#guideAction').dataset.action,orderId=$('#guideAction').dataset.guideOrder;
+ if(action==='connect'){toggleOrders(false);setTool('road');return;}
+ if(action==='decorate'){setTool('garden');return;}
+ setTool('inspect');toggleOrders(true);
+ if(orderId!=='')$('#orderList').querySelector(`[data-letter="${orderId}"]`)?.scrollIntoView({block:'nearest'});
+});
+
 $('#closeOrders').addEventListener('click',()=>toggleOrders(false));
 document.addEventListener('keydown',e=>{
  if(help.open){if(e.key==='Escape')help.close();return;}
