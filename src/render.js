@@ -1,7 +1,7 @@
 import { SIZE, inBounds, isLand, terrain, connections, evaluatePlacement, routeToBuilding, workplaceForOrder } from './model.js';
 
 const TILE_W=72, TILE_H=36, SPR_W=144, SPR_H=148;
-const names=['water','grass','grass2','meadow','clover','sand','road','farm','sawmill','bakery','home','garden','harbor','tree','bush','boat','neighbor','neighbor2','cat','lighthouse','dockpost','flowerpatch','rock'];
+const names=['water','grass','grass2','meadow','clover','sand','road','farm','sawmill','bakery','home','garden','harbor','tree','bush','boat','neighbor','neighbor2','cat','lighthouse','dockpost','flowerpatch','rock',...Array.from({length:16},(_,i)=>`road-${i}`)];
 const makeCanvas=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
 const poly=(c,points,fill,stroke,line=1)=>{c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.closePath();if(fill){c.fillStyle=fill;c.fill();}if(stroke){c.strokeStyle=stroke;c.lineWidth=line;c.stroke();}};
 const ellipse=(c,x,y,rx,ry,fill)=>{c.beginPath();c.ellipse(x,y,rx,ry,0,0,Math.PI*2);c.fillStyle=fill;c.fill();};
@@ -31,6 +31,17 @@ export function groundTexture(x,y,base){
  if(h<11)return 'meadow';
  if(h<24)return 'clover';
  return base;
+}
+/** +x, -x, -y, +y form four road directions in the fixed isometric grid. */
+export function roadMask(roadKeys,x,y){
+ return (roadKeys.has(`${x-1},${y}`)?1:0)
+      | (roadKeys.has(`${x+1},${y}`)?2:0)
+      | (roadKeys.has(`${x},${y-1}`)?4:0)
+      | (roadKeys.has(`${x},${y+1}`)?8:0);
+}
+export function isVillagePlaza(roadKeys,x,y){
+ const m=roadMask(roadKeys,x,y);
+ return (m.toString(2).match(/1/g)||[]).length>=3;
 }
 function ground(c,name){
  const isSea=name==='water',sand=name==='sand';
@@ -87,7 +98,11 @@ function walls(c,opt={}){
  poly(c,[[72,73],[99,59],[99,87],[72,103]],right,'#a6937e',.7);
  poly(c,[[41,58],[72,roofTop],[72,73],[41,62]],roofLeft,'#547779',.8);
  poly(c,[[72,roofTop],[104,57],[104,62],[72,73]],roofRight,'#547779',.8);
- poly(c,[[41,58],[72,roofTop],[104,57],[72,73]],null,'#577d78',1);
+ poly(c,[[41,58],[72,roofTop],[104,57],[72,73]],null,'#766f5d',1);
+ line(c,[[48,69],[48,87],[69,99]],'rgba(129,103,82,.58)',1.25);
+ line(c,[[96,69],[96,85],[75,99]],'rgba(126,98,76,.54)',1.25);
+ line(c,[[50,78],[68,88]],'rgba(153,119,91,.38)',.9);
+ line(c,[[76,89],[94,79]],'rgba(153,119,91,.36)',.9);
 }
 function sign(c,text,x,y,fill='#f8eee0',ink='#8d675c',r=10){ellipse(c,x,y,r,r,fill);c.font='bold 10px sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillStyle=ink;c.fillText(text,x,y+1);}
 export const CHARACTER_SPECS=Object.freeze({
@@ -95,13 +110,45 @@ export const CHARACTER_SPECS=Object.freeze({
   neighbor2:Object.freeze({headWidth:24.4,headHeight:23,bodyWidth:16,bodyHeight:12,feetY:103}),
   cat:Object.freeze({headWidth:21.4,headHeight:20,bodyWidth:14,bodyHeight:11,feetY:103})
 });
+/** The paved paths live entirely on the same ground plane as every 2:1 tile. */
+function roadPaving(c,mask){
+ const ends=[[1,[54,90]],[2,[90,108]],[4,[90,90]],[8,[54,108]]];
+ const count=(mask.toString(2).match(/1/g)||[]).length;
+ c.save();
+ c.beginPath();c.moveTo(72,81);c.lineTo(108,99);c.lineTo(72,117);c.lineTo(36,99);c.closePath();c.clip();
+ // Slight grassy verge and continuous limestone bands: neighboring masks join at one edge.
+ for(const [bit,end] of ends){
+   if(!(mask&bit))continue;
+   line(c,[[72,99],end],'#bbab8b',18);
+   line(c,[[72,99],end],'#ede0c6',14);
+   line(c,[[72,99],end],'#f6ead5',7);
+ }
+ if(count>=3){
+   diamond(c,72,99,27,12,'#ddcbaa','#aa9475');
+   diamond(c,72,99,21,9,'#f1e2c8','#d3b997');
+   // A small inlaid compass flower rather than another gameplay building.
+   ellipse(c,72,99,8.5,4.3,'#c6d1b6');
+   ellipse(c,72,99,5.5,2.9,'#e6dfc2');
+   for(const [dx,dy] of [[-5,0],[5,0],[0,-2],[0,2]])ellipse(c,72+dx,99+dy,2.3,1.3,'#adbd98');
+   ellipse(c,72,99,1.6,1,'#e6b37f');
+ }else{
+   diamond(c,72,99,13,6,'#e9dbc1','#c9b391');
+   ellipse(c,69,98,2,1,'rgba(252,249,230,.86)');
+ }
+ // Tiny stone seams add human scale without a repeated unbroken checkerboard.
+ for(const [bit,[ex,ey]] of ends){
+   if(!(mask&bit))continue;
+   const px=72+(ex-72)*.68,py=99+(ey-99)*.68;
+   line(c,[[px-2,py-1],[px+2,py+1]],'#d0bda0',.8);
+ }
+ c.restore();
+}
 function paint(c,name){
  c.save();
  if(['water','grass','grass2','meadow','clover','sand'].includes(name)){ground(c,name);}
- if(name==='road'){
-   diamond(c,72,99,26,12,'#e9dcc2','#d4bd9d');
-   poly(c,[[51,98],[57,95],[63,98],[58,101]],'#fbf4e3');
-   poly(c,[[73,106],[79,103],[85,106],[79,108]],'#d8c9aa');
+ if(name==='road'||name.startsWith('road-')){
+   const mask=name==='road'?0:Number(name.slice(5));
+   roadPaving(c,mask);
  }
  if(name==='farm'){
    shadow(c,27);
@@ -118,7 +165,7 @@ function paint(c,name){
    ellipse(c,97,86,5,5,'#dac5a4');ellipse(c,97,85,2,2,'#d7a25f');
  }
  if(name==='sawmill'){
-   walls(c,{left:'#b99d7e',right:'#d6b995',roofLeft:'#5d8372',roofRight:'#436d62',roofTop:35});
+   walls(c,{left:'#b99d7e',right:'#d6b995',roofLeft:'#b59770',roofRight:'#937756',roofTop:35});
    for(let i=0;i<3;i++)line(c,[[49,69+i*6],[70,80+i*6]],'#967e62',1.8);
    poly(c,[[80,75],[94,68],[94,81],[80,88]],'#8e674d','#705741',1);
    for(let i=0;i<3;i++){
@@ -127,7 +174,7 @@ function paint(c,name){
    line(c,[[71,34],[71,29],[87,34]],'#d8dfc9',1.5);
  }
  if(name==='bakery'){
-   walls(c,{left:'#efc7aa',right:'#f9ddbb',roofLeft:'#d88d81',roofRight:'#c77670',roofTop:33});
+   walls(c,{left:'#efc7aa',right:'#f9ddbb',roofLeft:'#cf8c76',roofRight:'#aa695b',roofTop:33});
    poly(c,[[73,79],[98,67],[98,80],[73,93]],'#ffefdf','#ac6c61');
    for(let i=0;i<4;i++)poly(c,[[74+i*6,79-i*3],[77+i*6,78-i*3],[77+i*6,91-i*3],[74+i*6,92-i*3]],i%2?'#f9e4cb':'#eaa79d');
    sign(c,'빵',52,73,'#fff4df','#a66a54',9);
@@ -135,7 +182,7 @@ function paint(c,name){
    line(c,[[42,58],[72,33],[104,57]],'#fff0e7',1.6);
  }
  if(name==='home'){
-   walls(c,{left:'#e1cfb4',right:'#f5e9d3',roofLeft:'#83aaae',roofRight:'#6d9d9e',roofTop:28});
+   walls(c,{left:'#e1cfb4',right:'#f5e9d3',roofLeft:'#d09a7f',roofRight:'#b17b69',roofTop:28});
    poly(c,[[79,78],[89,73],[89,89],[79,94]],'#8c7d73','#647970',.7);
    ellipse(c,86,83,1,1,'#f7e4bd');
    poly(c,[[49,69],[59,74],[59,82],[49,77]],'#c1d9d4','#e9f1e4',1.3);
@@ -158,7 +205,7 @@ function paint(c,name){
    shadow(c,32);
    diamond(c,72,101,33,17,'#9e765c','#785944');
    for(let i=0;i<5;i++)line(c,[[43+i*9,86+i*4.5],[72+i*8/2,103+i*.6]],'#b99274',1.5);
-   walls(c,{left:'#e2bd97',right:'#f2d8b8',roofLeft:'#a9a58b',roofRight:'#918f78',roofTop:32,base:false});
+   walls(c,{left:'#e2bd97',right:'#f2d8b8',roofLeft:'#a8b9a2',roofRight:'#829b8b',roofTop:32,base:false});
    sign(c,'港',53,74,'#fff4db','#77644f',9);
    line(c,[[107,99],[107,52]],'#87705d',2.2);
    poly(c,[[108,53],[124,59],[108,65]],'#dba27e');
@@ -292,6 +339,23 @@ function atlas(){
  }); return {canvas:c,cells};
 }
 const hash=(x,y)=>Math.abs(((x+5)*73856093)^((y+8)*19349663))%100;
+/** Visual foliage follows inhabited street edges but never changes buildable terrain. */
+export function sceneryAt(game,x,y,used){
+ if(!isLand(x,y,game)||used.has(`${x},${y}`))return null;
+ const h=hash(x,y),edge=x<5||x>18||y<5||y>19;
+ const nearVillage=game.buildings.some(b=>['home','bakery','garden','harbor'].includes(b.type)&&Math.abs(b.x-x)+Math.abs(b.y-y)<=3);
+ const roadFront=game.roads.some(r=>Math.abs(r.x-x)+Math.abs(r.y-y)<=2);
+ if(nearVillage&&roadFront){
+   if(h<31)return 'flowerpatch';
+   if(h<44)return 'bush';
+ }
+ if(edge&&h<19)return 'tree';
+ if(h<6)return 'bush';
+ if(h>=89&&h<94)return 'flowerpatch';
+ if(edge&&h===38)return 'rock';
+ return null;
+}
+
 export class Scene {
  constructor(canvas,game){
   this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});this.atlas=atlas();
@@ -350,16 +414,14 @@ export class Scene {
    const y=depth-x;if(!inBounds(x,y))continue;
    const p=this.tileCenter(x,y);this.sprite(c,groundTexture(x,y,terrain(x,y,this.game)),p.x,p.y);
   }
-  for(const r of this.game.roads){const p=this.tileCenter(r.x,r.y);this.sprite(c,'road',p.x,p.y);}
+  const roadKeys=new Set(this.game.roads.map(r=>`${r.x},${r.y}`));
+  for(const r of this.game.roads){const p=this.tileCenter(r.x,r.y);this.sprite(c,`road-${roadMask(roadKeys,r.x,r.y)}`,p.x,p.y);}
   const used=new Set([...this.game.roads,...this.game.buildings].map(b=>`${b.x},${b.y}`));
   const props=[];
   for(let x=0;x<SIZE;x++)for(let y=0;y<SIZE;y++){
     if(!isLand(x,y,this.game)||used.has(`${x},${y}`))continue;
-    const h=hash(x,y);const edge=x<5||x>18||y<5||y>19;
-    if(edge&&h<19)props.push({x,y,type:'tree'});
-    else if(h<6)props.push({x,y,type:'bush'});
-    else if(h>=89&&h<94)props.push({x,y,type:'flowerpatch'});
-    else if(edge&&h===38)props.push({x,y,type:'rock'});
+    const type=sceneryAt(this.game,x,y,used);
+    if(type)props.push({x,y,type});
   }
   if(!used.has('5,18'))props.push({x:5,y:18,type:'lighthouse'});
   // 방파제의 작은 말뚝은 물 위 장식으로만 놓인다.
