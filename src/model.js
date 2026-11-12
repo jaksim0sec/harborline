@@ -1,0 +1,148 @@
+export const SIZE = 24;
+export const DAY_MS = 15000;
+export const SAVE_KEY = 'harborline.save.v1';
+
+export const ITEMS = Object.freeze({
+  road: { name: '산책길', icon: '◌', coin: 8, wood: 0, description: '건물을 항구와 이어주는 길' },
+  farm: { name: '햇살 밭', icon: '🌾', coin: 65, wood: 2, description: '하루에 햇밀 4개' },
+  sawmill: { name: '나무 공방', icon: '🪵', coin: 120, wood: 3, description: '하루에 목재 4개' },
+  bakery: { name: '동네 빵집', icon: '🥐', coin: 145, wood: 5, description: '햇밀 3개로 빵 2개' },
+  home: { name: '작은 집', icon: '🏠', coin: 110, wood: 4, description: '주민 3명, 하루에 5코인' },
+  garden: { name: '꽃마당', icon: '🌷', coin: 70, wood: 2, description: '하루에 마을 온기 1개' }
+});
+
+const initialBuildings = [
+  { x: 9, y: 21, type: 'harbor' },
+  { x: 8, y: 16, type: 'farm' },
+  { x: 10, y: 17, type: 'sawmill' },
+  { x: 11, y: 17, type: 'bakery' },
+  { x: 8, y: 18, type: 'home' }
+];
+const initialRoads = [[9, 20], [9, 19], [9, 18], [9, 17], [9, 16], [10, 18], [11, 18], [12, 18]];
+const ORDER_TEMPLATES = [
+  { title: '옆섬 식탁에 햇밀을', detail: '따뜻한 아침을 위한 곡물', resource: 'grain', amount: 12, coin: 110, stars: 1 },
+  { title: '목수 아저씨의 부탁', detail: '다음 마을 배에 실을 목재', resource: 'wood', amount: 15, coin: 125, stars: 1 },
+  { title: '주말 빵 나눔', detail: '골목마다 퍼지는 고소한 향', resource: 'bread', amount: 6, coin: 170, stars: 2 },
+  { title: '바다 건너 작은 장터', detail: '햇밀을 기다리는 이웃', resource: 'grain', amount: 22, coin: 155, stars: 1 },
+  { title: '새집 짓는 날', detail: '튼튼한 나무가 필요해요', resource: 'wood', amount: 22, coin: 165, stars: 2 },
+  { title: '등대 아래 티타임', detail: '갓 구운 빵을 나눠요', resource: 'bread', amount: 10, coin: 225, stars: 2 }
+];
+const key = (x, y) => `${x},${y}`;
+export const inBounds = (x, y) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < SIZE && y < SIZE;
+function shoreValue(x, y) {
+  const dx = (x - 11.4) / 10.3, dy = (y - 11.5) / 10.65;
+  return dx * dx + dy * dy + Math.sin(x * 1.3 + y * .9) * .033 + Math.sin(y * 1.8 - x * .6) * .023;
+}
+export function isLand(x, y) { return inBounds(x, y) && shoreValue(x, y) < .995; }
+export function terrain(x, y) {
+  if (!isLand(x, y)) return 'water';
+  if ([[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => !isLand(x + dx, y + dy))) return 'sand';
+  const v = ((x * 73 + y * 43 + x * y * 13) % 11);
+  return v < 3 ? 'grass2' : 'grass';
+}
+function order(i) {
+  const template = ORDER_TEMPLATES[i % ORDER_TEMPLATES.length];
+  const lap = Math.floor(i / ORDER_TEMPLATES.length);
+  return { ...template, id: i, amount: template.amount + lap * (template.resource === 'bread' ? 3 : 5), coin: template.coin + lap * 35 };
+}
+export function createGame() {
+  return {
+    version: 1, day: 1, elapsed: 0, paused: false, speed: 1,
+    resources: { coin: 380, wood: 12, grain: 8, bread: 1, stars: 0 },
+    buildings: structuredClone(initialBuildings), roads: initialRoads.map(([x, y]) => ({ x, y })),
+    orders: [order(0), order(1), order(2)], nextOrder: 3, completed: 0, celebrated: false
+  };
+}
+export function occupied(game, x, y) { return game.buildings.some(b => b.x === x && b.y === y) || game.roads.some(r => r.x === x && r.y === y); }
+export function connections(game) {
+  const roads = new Set(game.roads.map(r => key(r.x, r.y)));
+  const reachable = new Set();
+  const harbor = game.buildings.find(b => b.type === 'harbor');
+  if (!harbor) return { roads: reachable, buildings: new Set() };
+  const queue = [[harbor.x, harbor.y]];
+  let head = 0;
+  while (head < queue.length) {
+    const [x, y] = queue[head++];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy, k = key(nx, ny);
+      if (roads.has(k) && !reachable.has(k)) { reachable.add(k); queue.push([nx, ny]); }
+    }
+  }
+  const buildings = new Set();
+  game.buildings.forEach(b => {
+    if (b.type === 'harbor' || [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => reachable.has(key(b.x + dx, b.y + dy)))) buildings.add(key(b.x, b.y));
+  });
+  return { roads: reachable, buildings };
+}
+export function place(game, type, x, y) {
+  if (!ITEMS[type]) return { ok: false, message: '알 수 없는 건물이에요' };
+  if (!isLand(x, y)) return { ok: false, message: '바다 위에는 지을 수 없어요' };
+  if (occupied(game, x, y)) return { ok: false, message: '이미 사용 중인 자리예요' };
+  const item = ITEMS[type];
+  if (game.resources.coin < item.coin || game.resources.wood < item.wood) return { ok: false, message: '코인이나 목재가 부족해요' };
+  game.resources.coin -= item.coin;
+  game.resources.wood -= item.wood;
+  if (type === 'road') game.roads.push({ x, y }); else game.buildings.push({ type, x, y });
+  const linked = type === 'road' ? connections(game).roads.has(key(x,y)) : connections(game).buildings.has(key(x,y));
+  return { ok: true, linked, message: linked ? `${item.name} 완성!` : `${item.name} 완성! 산책길로 항구와 이어주세요` };
+}
+export function remove(game, x, y) {
+  const index = game.buildings.findIndex(b => b.x === x && b.y === y && b.type !== 'harbor');
+  if (index !== -1) {
+    const [b] = game.buildings.splice(index, 1), item = ITEMS[b.type];
+    game.resources.coin += Math.floor(item.coin * .6);
+    game.resources.wood += Math.floor(item.wood * .5);
+    return { ok: true, message: `${item.name}을 정리하고 일부 재료를 돌려받았어요` };
+  }
+  const ri = game.roads.findIndex(r => r.x === x && r.y === y);
+  if (ri !== -1) { game.roads.splice(ri, 1); game.resources.coin += 4; return { ok: true, message: '산책길을 정리했어요' }; }
+  return { ok: false, message: '정리할 건물이 없어요' };
+}
+export function advanceDay(game) {
+  game.day++;
+  const linked = connections(game).buildings;
+  const active = type => game.buildings.filter(b => b.type === type && linked.has(key(b.x, b.y))).length;
+  game.resources.grain += active('farm') * 4;
+  game.resources.wood += active('sawmill') * 4;
+  const bakeries = active('bakery');
+  const batches = Math.min(bakeries, Math.floor(game.resources.grain / 3));
+  game.resources.grain -= batches * 3;
+  game.resources.bread += batches * 2;
+  game.resources.coin += active('home') * 5;
+  game.resources.stars += active('garden');
+  return { grain: active('farm') * 4 - batches * 3, wood: active('sawmill') * 4, bread: batches * 2, coin: active('home') * 5 };
+}
+export function deliver(game, id) {
+  const index = game.orders.findIndex(o => o.id === id);
+  if (index === -1) return { ok: false, message: '이미 완료된 배달이에요' };
+  const o = game.orders[index];
+  if (game.resources[o.resource] < o.amount) return { ok: false, message: '필요한 물자가 아직 부족해요' };
+  game.resources[o.resource] -= o.amount;
+  game.resources.coin += o.coin;
+  game.resources.stars += o.stars;
+  game.completed++;
+  game.orders.splice(index, 1, order(game.nextOrder++));
+  let festival = false;
+  if (game.completed >= 6 && !game.celebrated) {
+    game.celebrated = true; game.resources.coin += 300; game.resources.stars += 5; festival = true;
+  }
+  return { ok: true, festival, message: festival ? '바다 축제 시작! 마을에 300코인과 온기 5개가 도착했어요 🎊' : '배달 성공! 이웃에게 따뜻한 마음이 전해졌어요' };
+}
+export function population(game) { return 2 + game.buildings.filter(b => b.type === 'home').length * 3; }
+export function hydrate(value) {
+  if (!value || value.version !== 1 || !Array.isArray(value.buildings) || !Array.isArray(value.roads) || !Array.isArray(value.orders)) return createGame();
+  const game = createGame();
+  game.day = Math.max(1, Math.floor(Number(value.day) || 1));
+  game.completed = Math.max(0, Math.floor(Number(value.completed) || 0));
+  game.nextOrder = Math.max(3, Math.floor(Number(value.nextOrder) || 3));
+  game.celebrated = Boolean(value.celebrated);
+  for (const k of ['coin','wood','grain','bread','stars']) game.resources[k] = Math.max(0, Math.min(1e8, Math.floor(Number(value.resources?.[k]) || 0)));
+  const known = new Set(['harbor', ...Object.keys(ITEMS).filter(x => x !== 'road')]);
+  game.buildings = value.buildings.filter(b => inBounds(b.x,b.y) && isLand(b.x,b.y) && known.has(b.type)).slice(0, SIZE*SIZE).map(b=>({x:b.x,y:b.y,type:b.type}));
+  if (!game.buildings.some(b=>b.type==='harbor')) game.buildings.unshift({x:9,y:21,type:'harbor'});
+  const buildingKeys = new Set(game.buildings.map(b => key(b.x,b.y)));
+  game.roads = value.roads.filter(r=>inBounds(r.x,r.y) && isLand(r.x,r.y) && !buildingKeys.has(key(r.x,r.y))).slice(0,SIZE*SIZE).map(r=>({x:r.x,y:r.y}));
+  game.orders = value.orders.filter(o=>Number.isInteger(o.id) && ['grain','wood','bread'].includes(o.resource) && Number.isFinite(o.amount) && o.amount>0 && Number.isFinite(o.coin)).slice(0,3).map(o=>({...o,amount:Math.floor(o.amount),coin:Math.floor(o.coin),stars:Math.max(0,Math.floor(o.stars||0))}));
+  while (game.orders.length < 3) game.orders.push(order(game.nextOrder++));
+  return game;
+}

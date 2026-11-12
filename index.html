@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f4eb">
+  <meta name="description" content="작은 바닷마을을 가꾸고 이웃에게 따뜻한 물건을 보내는 아늑한 2.5D 경영 게임">
+  <title>파도마을 | HARBORLINE</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="identity">
+        <div class="identity-mark" aria-hidden="true">〰</div>
+        <div class="identity-copy"><div class="brand-overline">HARBORLINE <span>· 작은 마을의 큰 하루</span></div><h1>파도마을</h1></div>
+      </div>
+      <div class="header-actions">
+        <span id="dayBadge" class="day-badge">☀️ 1일차</span>
+        <button id="pauseBtn" class="small-button" type="button" title="시간 멈추기" aria-label="시간 멈추기">Ⅱ</button>
+        <button id="speedBtn" class="speed-button" type="button" title="시간 배속">×1</button>
+        <button id="helpBtn" class="small-button" type="button" title="도움말과 설정" aria-label="도움말과 설정">☰</button>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <canvas id="world" aria-label="건물을 지어서 마을을 성장시키는 등각 투영 게임 지도. 아래 도구를 고르고 지도에서 위치를 선택하세요"></canvas>
+      <div class="watermark" aria-hidden="true">잔잔한 파도, 천천히 자라는 마을</div>
+
+      <section class="left-hud" aria-label="마을 자원">
+        <div class="resource-row">
+          <div class="resource"><span class="resource-icon coin-icon">◈</span><div><span class="resource-title">코인</span><strong id="coin">380</strong></div></div>
+          <div class="resource"><span class="resource-icon wood-icon">▰</span><div><span class="resource-title">목재</span><strong id="wood">12</strong></div></div>
+          <div class="resource"><span class="resource-icon grain-icon">✦</span><div><span class="resource-title">햇밀</span><strong id="grain">8</strong></div></div>
+          <div class="resource"><span class="resource-icon bread-icon">◕</span><div><span class="resource-title">빵</span><strong id="bread">1</strong></div></div>
+        </div>
+        <div class="village-status">
+          <span class="status-dot"></span><strong id="population">주민 5명</strong>
+          <span class="status-separator">·</span><span id="happiness">마을 온기 0</span>
+        </div>
+      </section>
+
+      <section class="note-card" aria-label="마을 가꾸기 안내">
+        <div class="note-illustration" aria-hidden="true">✿</div>
+        <div><span class="note-eyebrow">오늘의 작은 시작</span><p id="guideText">하루가 지나면 밭과 공방이 일해요<br>이웃에게 배달하고 마을을 넓혀보세요</p></div>
+        <button id="hideGuide" class="note-close" type="button" aria-label="안내 닫기">×</button>
+      </section>
+
+      <aside class="orders-panel" id="ordersPanel" aria-label="배달 요청">
+        <div class="orders-heading">
+          <div><div class="section-overline">PORT LETTERS</div><h2>바다 건너 온 편지 <span class="envelope">✉</span></h2></div>
+          <button id="closeOrders" class="close-orders" type="button" aria-label="배달 목록 닫기">×</button>
+        </div>
+        <p class="orders-description">이웃에게 필요한 물건을 보내주세요</p>
+        <div class="order-list" id="orderList"></div>
+        <div class="festival">
+          <div class="festival-title"><strong>🎐 첫 바다 축제</strong><span id="festivalLabel">0 / 6</span></div>
+          <div class="festival-track"><div id="festivalFill" class="festival-fill"></div></div>
+          <p id="festivalHint">배달 6번을 마치면 마을에 축제가 열려요</p>
+        </div>
+      </aside>
+
+      <div class="map-controls" aria-label="지도 조작">
+        <button id="zoomIn" type="button" aria-label="확대">+</button>
+        <button id="zoomOut" type="button" aria-label="축소">−</button>
+        <button id="centerMap" type="button" aria-label="가운데로">⌖</button>
+      </div>
+      <div class="inspect-card" id="inspectCard" hidden></div>
+      <div class="tool-hint" id="toolHint">🖱 지도를 드래그해서 둘러보세요</div>
+      <button id="mobileOrders" class="mobile-orders" type="button" aria-controls="ordersPanel" aria-expanded="false">✉ 배달 <span id="readyCount">3</span></button>
+
+      <nav class="buildbar" aria-label="마을 건설 도구">
+        <div class="buildbar-head"><span>우리 마을 가꾸기</span><span class="buildbar-sub">원하는 건물을 고르세요</span></div>
+        <div class="buildbar-items" id="buildTools"></div>
+      </nav>
+      <div class="time-track" aria-hidden="true"><div id="dayProgress"></div></div>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </main>
+  </div>
+
+  <dialog id="helpDialog" class="help-dialog">
+    <div class="dialog-head"><div><span class="section-overline">WELCOME TO THE COAST</span><h2>파도마을 안내서</h2></div><button class="small-button" id="closeHelp" type="button" aria-label="닫기">×</button></div>
+    <p>조금씩 만들어 가는 나만의 바닷마을. 바쁜 일 없이, 하고 싶은 만큼 즐겨요.</p>
+    <div class="help-steps">
+      <div><span>01</span><div><strong>만들기</strong><p>아래 건설 도구를 골라 빈 땅을 누르세요. 길을 통해 항구와 이어야 건물이 일해요.</p></div></div>
+      <div><span>02</span><div><strong>기다리기</strong><p>15초마다 하루가 지나고 농장·공방·빵집이 물건을 만들어요. ×2로 빠르게 진행할 수 있어요.</p></div></div>
+      <div><span>03</span><div><strong>나누기</strong><p>편지에 적힌 물건을 배달하면 코인과 마을 온기를 얻어요. 6번 배달하면 첫 축제!</p></div></div>
+    </div>
+    <p class="tiny-help">조작: 드래그 이동 · 스크롤 또는 +/- 확대 · 1~6 건물 선택 · Esc 선택 해제 · Space 일시정지<br>진행 상황은 이 브라우저에 자동 저장됩니다.</p>
+    <div class="dialog-actions"><button id="resetBtn" class="danger-ghost" type="button">처음부터 시작</button><button id="helpOkay" class="primary-button" type="button">마을로 돌아가기</button></div>
+  </dialog>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
