@@ -1,6 +1,19 @@
 import { SIZE, inBounds, isLand, terrain, connections, evaluatePlacement, routeToBuilding, workplaceForOrder } from './model.js';
 
 const TILE_W=72, TILE_H=36, SPR_W=144, SPR_H=148;
+/** Fixed sprites extracted into true RGBA PNG files, from one coordinated art study. */
+export const PAINTED_TEXTURES=Object.freeze({
+ home:'/assets/textures/home.png',
+ bakery:'/assets/textures/bakery.png',
+ tree:'/assets/textures/tree.png'
+});
+/** Rendering-only size; the actor's world position and collision do not change. */
+export const ACTOR_SCALES=Object.freeze({neighbor:.68,neighbor2:.68,cat:.75});
+/** Keep the actor's shoes planted on the original 2.5D tile contact plane. */
+export function spriteDestination(x,y,scale=1){
+ return {x:Math.round(x-72*scale),y:Math.round(y-100*scale),width:SPR_W*scale,height:SPR_H*scale};
+}
+
 const names=['water','grass','grass2','meadow','clover','sand','road','farm','sawmill','bakery','home','garden','harbor','tree','bush','boat','neighbor','neighbor2','cat','lighthouse','dockpost','flowerpatch','rock','squareFountain',...Array.from({length:16},(_,i)=>`road-${i}`)];
 const makeCanvas=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
 const poly=(c,points,fill,stroke,line=1)=>{c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.closePath();if(fill){c.fillStyle=fill;c.fill();}if(stroke){c.strokeStyle=stroke;c.lineWidth=line;c.stroke();}};
@@ -546,6 +559,27 @@ function atlas(){
    const col=i%4,row=Math.floor(i/4);ctx.save();ctx.translate(col*SPR_W,row*SPR_H);paint(ctx,name);ctx.restore();cells.set(name,{sx:col*SPR_W,sy:row*SPR_H});
  }); return {canvas:c,cells};
 }
+/** Load images once. Preserve procedural atlas cells as a fallback if an asset fails. */
+export function loadPaintedTextures(atlas){
+ if(typeof Image==='undefined')return Promise.resolve([]);
+ const tasks=Object.entries(PAINTED_TEXTURES).map(([name,url])=>new Promise(resolve=>{
+   const image=new Image();
+   image.onload=()=>resolve({name,image});
+   image.onerror=()=>resolve(null);
+   image.src=url;
+ }));
+ return Promise.all(tasks).then(results=>{
+ const successful=results.filter(Boolean);
+ if(!successful.length)return [];
+ const c=atlas.canvas.getContext('2d');
+ for(const {name,image} of successful){
+   const cell=atlas.cells.get(name);if(!cell)continue;
+   c.clearRect(cell.sx,cell.sy,SPR_W,SPR_H);
+   c.drawImage(image,cell.sx,cell.sy,SPR_W,SPR_H);
+ }
+ return successful.map(v=>v.name);
+ });
+}
 const hash=(x,y)=>Math.abs(((x+5)*73856093)^((y+8)*19349663))%100;
 /** Visual foliage follows inhabited street edges but never changes buildable terrain. */
 export function sceneryAt(game,x,y,used){
@@ -571,6 +605,14 @@ export class Scene {
   this.hover=null;this.tool='inspect';this.quality=1;this.width=1;this.height=1;this.t=0;this.fps=0;this.samples=[];
   this.CW=SIZE*TILE_W+240;this.CH=SIZE*TILE_H+270;this.OX=this.CW/2;this.OY=130;
   this.resize();
+  this.artReady=loadPaintedTextures(this.atlas).then(loaded=>{
+    if(loaded.length){
+      this.previews.clear();
+      this.invalidate();
+      this.canvas.dispatchEvent(new Event('harborline:art-ready'));
+    }
+    return loaded;
+  });
  }
  resize(){
   const rect=this.canvas.getBoundingClientRect();this.width=Math.max(1,rect.width);this.height=Math.max(1,rect.height);
@@ -614,7 +656,7 @@ export class Scene {
   else c.drawImage(this.atlas.canvas,src.sx+31,src.sy+23,82,92,5,0,82,92);
   const uri=preview.toDataURL('image/png');this.previews.set(name,uri);return uri;
  }
- sprite(ctx,name,x,y){const s=this.atlas.cells.get(name);if(!s)return;ctx.drawImage(this.atlas.canvas,s.sx,s.sy,SPR_W,SPR_H,Math.round(x-72),Math.round(y-100),SPR_W,SPR_H);}
+ sprite(ctx,name,x,y,scale=1){const s=this.atlas.cells.get(name);if(!s)return;const d=spriteDestination(x,y,scale);ctx.drawImage(this.atlas.canvas,s.sx,s.sy,SPR_W,SPR_H,d.x,d.y,d.width,d.height);}
  tileCenter(x,y){return {x:this.OX+(x-y)*TILE_W/2,y:this.OY+(x+y)*TILE_H/2};}
  buildCache(){
   const cache=makeCanvas(this.CW,this.CH),c=cache.getContext('2d');
@@ -719,7 +761,7 @@ export class Scene {
     const v=visiting?plazaVisitSample(this.animationTime,path):walkSample(this.animationTime+offset,path,speed);
     if(!v)continue;
     const px=(v.x-v.y)*TILE_W/2,py=(v.x+v.y)*TILE_H/2-(SIZE-1)*TILE_H/2;
-    this.sprite(c,type,px,py+Math.sin((this.animationTime+offset)*.01)*.6);
+    this.sprite(c,type,px,py+Math.sin((this.animationTime+offset)*.01)*.6,ACTOR_SCALES[type]||1);
     // Restore only nearby foreground silhouettes, keeping the island itself cached.
     for(const prop of this.occluders||[]){
       if(!shouldOcclude(v,prop))continue;

@@ -24,6 +24,8 @@ function setTool(name){selected=name;scene.tool=name;scene.hover=null;inspectAt=
 function renderTools(){const tools=[['inspect',{name:'둘러보기',icon:'⌕',coin:null,wood:0}],...Object.entries(ITEMS)];
  $('#buildTools').innerHTML=tools.map(([key,item],i)=>`<button class="tool ${selected===key?'selected':''}" data-tool="${key}" type="button" title="${esc(item.description||'지도를 이동하고 건물을 살펴봐요')}" aria-pressed="${selected===key}"><span class="tool-art" aria-hidden="true">${key==='inspect'?'<span class="inspect-icon">⌕</span>':`<img src="${scene.toolPreview(key)}" alt="" width="48" height="48">`}</span><span class="tool-name">${item.name}</span><span class="tool-cost">${item.coin===null?'이동 · 정보':`${item.coin}코인${item.wood?` · 목재${item.wood}`:''}`}</span></button>`).join('');
 }
+// Refresh thumbnails once painted texture atlas cells are ready.
+canvas.addEventListener('harborline:art-ready',()=>renderTools());
 function renderHUD(){
  for(const k of ['coin','wood','grain','bread'])$('#'+k).textContent=fmt(game.resources[k]);
  $('#population').textContent=`주민 ${fmt(population(game))}명`;
