@@ -65,6 +65,38 @@ async def check():
   assert await page.locator('#festivalLabel').inner_text()=='1 / 6'
   await page.keyboard.press('Escape')
   assert not await page.locator('#ordersPanel').is_visible(), 'Escape should return to the map'
+  # Gameplay feedback should be visible, not just state math.
+  lives=await page.evaluate('''() => {
+    const ctx=scene.atlas.canvas.getContext('2d');
+    return ['neighbor','neighbor2','cat'].map(n=>{
+      const {sx,sy}=scene.atlas.cells.get(n), data=ctx.getImageData(sx,sy,144,148).data;
+      let pixels=0;for(let i=3;i<data.length;i+=4)if(data[i]>0)pixels++;
+      return {n,pixels};
+    });
+  }''')
+  assert all(row['pixels']>65 for row in lives),lives
+  alive=await page.evaluate('''() => {
+    scene.invalidate();scene.buildCache();
+    const result=advanceDay(game);scene.showProduction(result.activity);
+    return {routes:scene.walkPaths.map(p=>p.length),flashes:scene.flashes?.length,activity:result.activity.length};
+  }''')
+  assert alive['routes'] and all(n>=2 for n in alive['routes']),alive
+  assert alive['flashes']>0 and alive['activity']>0,alive
+  assert await page.evaluate('scene.voyage') is not None,'successful delivery should animate boat'
+  paused=await page.evaluate('''() => {
+    const base=scene.t || performance.now();
+    scene.render(base+100);
+    const start=scene.animationTime;
+    game.paused=true;scene.render(base+320);
+    const frozen=scene.animationTime;
+    game.paused=false;scene.render(base+520);
+    const resumed=scene.animationTime;
+    const restored=hydrate(JSON.parse(JSON.stringify(game)));
+    return {start,frozen,resumed,version:restored.version,day:restored.day,
+      snapshot:JSON.stringify(restored.resources)===JSON.stringify(game.resources)};
+  }''')
+  assert paused['frozen']==paused['start'] and paused['resumed']>paused['frozen'],paused
+  assert paused['version']==1 and paused['snapshot'] and paused['day']>=2,paused
   duration=await page.evaluate('''() => {let t=performance.now();for(let i=0;i<80;i++) scene.render(t+i*32);return (performance.now()-t)/80;}''')
   print('desktop e2e: OK, avg render ms/frame=',round(duration,2),'errors=',errors)
   await page.set_viewport_size({'width':390,'height':844});await page.wait_for_timeout(350)

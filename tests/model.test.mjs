@@ -1,3 +1,4 @@
+import * as gameRules from "../src/model.js";
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createGame, connections, place, remove, advanceDay, deliver, hydrate, isLand, terrain, population, evaluatePlacement } from '../src/model.js';
@@ -85,4 +86,57 @@ test('placement preview distinguishes sea, occupied and insufficient material',(
  const result=evaluatePlacement(g,'home',12,17);
  assert.equal(result.ok,false);
  assert.match(result.message,/부족/);
+});
+
+
+test('residents can reach each working building by its currently connected roads', () => {
+ const g=createGame(); const before=JSON.stringify(g);
+ assert.equal(typeof gameRules.routeToBuilding, 'function');
+ for (const b of g.buildings.filter(b=>b.type!=='harbor')) {
+  const route=gameRules.routeToBuilding(g,b.x,b.y);
+  assert.ok(route && route.length>=2, `${b.type} missing route`);
+  assert.deepEqual(route[0],{x:9,y:21});
+  const end=route.at(-1);
+  assert.equal(Math.abs(end.x-b.x)+Math.abs(end.y-b.y),1);
+  for(let i=1;i<route.length;i++) {
+   assert.equal(Math.abs(route[i].x-route[i-1].x)+Math.abs(route[i].y-route[i-1].y),1);
+   assert.ok(g.roads.some(r=>r.x===route[i].x&&r.y===route[i].y));
+  }
+ }
+ assert.equal(JSON.stringify(g),before, 'planning must not mutate saved world');
+});
+
+test('no route is assigned to a disconnected building, and a removed harbor link clears routes', () => {
+ const g=createGame();
+ assert.equal(typeof gameRules.routeToBuilding, 'function');
+ assert.equal(place(g,'farm',16,10).ok,true);
+ assert.equal(gameRules.routeToBuilding(g,16,10),null);
+ assert.ok(gameRules.routeToBuilding(g,8,16));
+ remove(g,9,20);
+ assert.equal(gameRules.routeToBuilding(g,8,16),null);
+});
+
+test('daily activity records actual connected building output, without changing resource accounting',()=>{
+ const g=createGame(), original={...g.resources};
+ const report=advanceDay(g);
+ assert.ok(Array.isArray(report.activity), 'day report requires activity events');
+ const sum=resource=>report.activity.filter(e=>e.resource===resource).reduce((n,e)=>n+e.amount,0);
+ assert.equal(sum('grain'),4);
+ assert.equal(sum('wood'),4);
+ assert.equal(sum('bread'),2);
+ assert.equal(sum('coin'),5);
+ assert.equal(report.activity.some(e=>e.type==='farm'&&e.x===8&&e.y===16),true);
+ assert.equal(g.resources.grain,original.grain+4-3);
+ assert.equal(g.resources.bread,original.bread+2);
+ assert.ok(report.activity.every(e=>e.amount>0&&Number.isInteger(e.x)&&Number.isInteger(e.y)));
+});
+
+test('a bakery without grain and a disconnected farm have no production receipt',()=>{
+ const g=createGame();remove(g,8,16);g.resources.grain=0;
+ assert.equal(place(g,'farm',16,10).ok,true);
+ const report=advanceDay(g);
+ assert.ok(Array.isArray(report.activity));
+ assert.ok(!report.activity.some(e=>e.resource==='grain'||e.resource==='bread'));
+ assert.equal(report.bread,0);
+ assert.equal(g.resources.bread,1);
 });

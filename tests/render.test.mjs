@@ -1,3 +1,4 @@
+import * as visual from "../src/render.js";
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { walkSample, BUILDING_BASE } from '../src/render.js';
@@ -21,4 +22,15 @@ test('building foundation extends to the ground beneath wall endpoints', () => {
   assert.equal(BUILDING_BASE.centerY, 92);
   assert.equal(BUILDING_BASE.centerY + BUILDING_BASE.halfHeight, 108);
   assert.ok(BUILDING_BASE.centerY + BUILDING_BASE.halfHeight > BUILDING_BASE.wallFrontY);
+});
+
+
+test('delivery boat trip has a visible outbound leg, return, and stable endpoint',()=>{
+ assert.equal(typeof visual.boatTripPoint, 'function');
+ const start=visual.boatTripPoint(0), middle=visual.boatTripPoint(.5),end=visual.boatTripPoint(1);
+ assert.deepEqual({x:start.x,y:start.y},{x:9,y:23});
+ assert.ok(Math.hypot(start.x-middle.x,start.y-middle.y)>2);
+ assert.deepEqual({x:end.x,y:end.y},{x:9,y:23});
+ assert.ok(visual.boatTripPoint(-3).x===9);
+ assert.ok(visual.boatTripPoint(999).x===9);
 });

@@ -74,6 +74,38 @@ export function connections(game) {
   });
   return { roads: reachable, buildings };
 }
+/** Shortest harbor-to-workplace path using the placed road network.
+ * Returns harbor and road tiles (ending beside the building), never mutates state.
+ */
+export function routeToBuilding(game, x, y) {
+  const building = game.buildings.find(b => b.x === x && b.y === y && b.type !== 'harbor');
+  const harbor = game.buildings.find(b => b.type === 'harbor');
+  if (!building || !harbor) return null;
+  const roads = new Set(game.roads.map(r => key(r.x, r.y)));
+  const goals = new Set([[1,0],[-1,0],[0,1],[0,-1]]
+    .map(([dx,dy]) => key(x+dx,y+dy)).filter(k=>roads.has(k)));
+  if(!goals.size)return null;
+  const queue=[{x:harbor.x,y:harbor.y}], start=key(harbor.x,harbor.y);
+  const cameFrom=new Map([[start,null]]);
+  for(let head=0;head<queue.length;head++){
+    const current=queue[head], here=key(current.x,current.y);
+    if(goals.has(here)){
+      const result=[];
+      for(let step=here;step!==null;step=cameFrom.get(step)){
+        const [rx,ry]=step.split(',').map(Number);result.push({x:rx,y:ry});
+      }
+      return result.reverse();
+    }
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=current.x+dx,ny=current.y+dy,nk=key(nx,ny);
+      if(roads.has(nk) && !cameFrom.has(nk)){
+        cameFrom.set(nk,here);queue.push({x:nx,y:ny});
+      }
+    }
+  }
+  return null;
+}
+
 const neighbors = (x,y) => [[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dy])=>key(x+dx,y+dy));
 
 /** Placement feedback only. Does not charge resources or mutate the game. */
@@ -115,16 +147,32 @@ export function remove(game, x, y) {
 export function advanceDay(game) {
   game.day++;
   const linked = connections(game).buildings;
-  const active = type => game.buildings.filter(b => b.type === type && linked.has(key(b.x, b.y))).length;
-  game.resources.grain += active('farm') * 4;
-  game.resources.wood += active('sawmill') * 4;
-  const bakeries = active('bakery');
-  const batches = Math.min(bakeries, Math.floor(game.resources.grain / 3));
+  const active = type => game.buildings.filter(b => b.type === type && linked.has(key(b.x, b.y)));
+  const farms = active('farm'), mills = active('sawmill');
+  const bakeries = active('bakery'), homes = active('home'), gardens = active('garden');
+  const activity = [];
+  const record = (buildings, resource, amount) => {
+    for (const b of buildings) activity.push({x:b.x, y:b.y, type:b.type, resource, amount});
+  };
+  game.resources.grain += farms.length * 4;
+  game.resources.wood += mills.length * 4;
+  record(farms, 'grain', 4);
+  record(mills, 'wood', 4);
+  const batches = Math.min(bakeries.length, Math.floor(game.resources.grain / 3));
   game.resources.grain -= batches * 3;
   game.resources.bread += batches * 2;
-  game.resources.coin += active('home') * 5;
-  game.resources.stars += active('garden');
-  return { grain: active('farm') * 4 - batches * 3, wood: active('sawmill') * 4, bread: batches * 2, coin: active('home') * 5 };
+  record(bakeries.slice(0, batches), 'bread', 2);
+  game.resources.coin += homes.length * 5;
+  game.resources.stars += gardens.length;
+  record(homes, 'coin', 5);
+  record(gardens, 'stars', 1);
+  return {
+    grain: farms.length * 4 - batches * 3,
+    wood: mills.length * 4,
+    bread: batches * 2,
+    coin: homes.length * 5,
+    activity
+  };
 }
 export function deliver(game, id) {
   const index = game.orders.findIndex(o => o.id === id);
